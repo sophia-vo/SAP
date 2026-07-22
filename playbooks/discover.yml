@@ -1,0 +1,79 @@
+---
+# Optional read-only discovery pass. It does not alter the source CSV files or
+# validation routing; it captures evidence that can be reviewed or used by a
+# future CMDB/discovery integration.
+
+- name: "Discover SAP topology evidence"
+  hosts: "{{ target_group | default('sap_hosts') }}"
+  gather_facts: false
+  become: true
+  serial: "{{ validation_batch_size | default(50) }}"
+  max_fail_percentage: 100
+  vars:
+    run_dir: "{{ validation_run_dir | default(playbook_dir ~ '/../artifacts/' ~ run_timestamp) }}"
+    host_dir: "{{ run_dir }}/{{ server_id | default(inventory_hostname) }}"
+
+  tasks:
+    - name: "LOCAL: create server discovery directory"
+      ansible.builtin.file:
+        path: "{{ host_dir }}/discovery"
+        state: directory
+        mode: "0755"
+      delegate_to: localhost
+      become: false
+      tags: always
+
+    - name: "DISCOVER: read sapservices"
+      ansible.builtin.command: cat /usr/sap/sapservices
+      register: discovery_sapservices
+      changed_when: false
+      failed_when: false
+      tags: [discovery]
+
+    - name: "DISCOVER: list SAP Host Agent instances"
+      ansible.builtin.command: /usr/sap/hostctrl/exe/saphostctrl -function ListInstances
+      register: discovery_host_agent
+      changed_when: false
+      failed_when: false
+      tags: [discovery]
+
+    - name: "DISCOVER: list local SAP directories"
+      ansible.builtin.shell: |
+        set -o pipefail
+        find /usr/sap -mindepth 1 -maxdepth 2 -type d -print 2>/dev/null | sort
+      args:
+        executable: /bin/bash
+      register: discovery_directories
+      changed_when: false
+      failed_when: false
+      tags: [discovery]
+
+    - name: "LOCAL: write discovery evidence"
+      ansible.builtin.copy:
+        dest: "{{ host_dir }}/discovery/discovery.json"
+        mode: "0644"
+        content: >-
+          {{
+            {
+              'server_id': (server_id | default(inventory_hostname)),
+              'inventory_hostname': inventory_hostname,
+              'sapservices': {
+                'rc': discovery_sapservices.rc,
+                'stdout': discovery_sapservices.stdout,
+                'stderr': discovery_sapservices.stderr
+              },
+              'host_agent': {
+                'rc': discovery_host_agent.rc,
+                'stdout': discovery_host_agent.stdout,
+                'stderr': discovery_host_agent.stderr
+              },
+              'sap_directories': {
+                'rc': discovery_directories.rc,
+                'stdout_lines': discovery_directories.stdout_lines,
+                'stderr': discovery_directories.stderr
+              }
+            } | to_nice_json
+          }}
+      delegate_to: localhost
+      become: false
+      tags: always

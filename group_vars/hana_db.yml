@@ -1,0 +1,7 @@
+---
+# Generic defaults for hosts that contain a HANA instance.
+# SID-, instance-, path-, and administrator-specific values are generated as
+# host variables from inputs/instances.csv.
+
+hana_mounts_to_validate:
+  - /

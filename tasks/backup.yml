@@ -1,0 +1,390 @@
+---
+# Read-only HANA backup checks.
+# Tags: incrond, backint, log_mode, log_backup_interval_mode,
+#       last_successful_backup
+
+- name: "BACKUP: inspect incrond service"
+  ansible.builtin.systemd:
+    name: incrond
+  register: incrond_status
+  changed_when: false
+  failed_when: false
+  when: hana_validate_incrond | bool
+  tags: [incrond]
+
+- name: "BACKUP: record incrond result"
+  ansible.builtin.set_fact:
+    hana_check_results: >-
+      {{ hana_check_results + [{
+        'check': 'incrond.service',
+        'status': (
+          'PASS'
+          if (incrond_status.status.ActiveState | default('unknown')) == 'active'
+          else 'WARN'
+        ),
+        'details': 'ActiveState=' ~
+                   (incrond_status.status.ActiveState |
+                    default('not installed or unavailable'))
+      }] }}
+  when: hana_validate_incrond | bool
+  tags: [incrond]
+
+- name: "BACKUP: save incrond raw evidence"
+  ansible.builtin.copy:
+    dest: "{{ host_raw_dir }}/incrond.json"
+    mode: "0644"
+    content: "{{ incrond_status | default({}) | to_nice_json }}\n"
+  delegate_to: localhost
+  become: false
+  when:
+    - hana_validate_incrond | bool
+    - save_raw_outputs | bool
+  tags: [incrond]
+
+- name: "BACKUP: inspect HANA Backint integration directory"
+  ansible.builtin.stat:
+    path: "{{ backint_integration_path }}"
+  register: backint_dir
+  when: hana_validate_backint | bool
+  tags: [backint]
+
+- name: "BACKUP: list Backint integration files"
+  ansible.builtin.find:
+    paths: "{{ backint_integration_path }}"
+    file_type: any
+    recurse: true
+    hidden: true
+  register: backint_files
+  failed_when: false
+  when:
+    - hana_validate_backint | bool
+    - backint_dir.stat.isdir | default(false)
+  tags: [backint]
+
+- name: "BACKUP: record Backint result"
+  ansible.builtin.set_fact:
+    hana_check_results: >-
+      {{ hana_check_results + [{
+        'check': 'HANA Backint integration',
+        'status': (
+          'FAIL'
+          if not (backint_dir.stat.exists | default(false))
+          else (
+            'PASS'
+            if (backint_files.matched | default(0) | int) > 0
+            else 'WARN'
+          )
+        ),
+        'details': (
+          'Directory missing: ' ~ backint_integration_path
+          if not (backint_dir.stat.exists | default(false))
+          else (
+            backint_integration_path ~
+            '; entries=' ~ (backint_files.matched | default(0) | string)
+          )
+        )
+      }] }}
+  when: hana_validate_backint | bool
+  tags: [backint]
+
+- name: "BACKUP: save Backint raw evidence"
+  ansible.builtin.copy:
+    dest: "{{ host_raw_dir }}/backint_inventory.txt"
+    mode: "0644"
+    content: |
+      path={{ backint_integration_path }}
+      exists={{ backint_dir.stat.exists | default(false) }}
+      is_directory={{ backint_dir.stat.isdir | default(false) }}
+      matched={{ backint_files.matched | default(0) }}
+      files:
+      {% for backint_file in backint_files.files | default([]) %}
+      {{ backint_file.path }}
+      {% endfor %}
+  delegate_to: localhost
+  become: false
+  when:
+    - hana_validate_backint | bool
+    - save_raw_outputs | bool
+  tags: [backint]
+
+- name: "BACKUP: query effective SYSTEMDB log_mode"
+  ansible.builtin.shell: |
+    SQL="SELECT TOP 1 VALUE
+    FROM SYS.M_INIFILE_CONTENTS
+    WHERE FILE_NAME='global.ini'
+      AND SECTION='persistence'
+      AND KEY='log_mode'
+    ORDER BY CASE LAYER_NAME
+      WHEN 'HOST' THEN 4
+      WHEN 'SYSTEM' THEN 3
+      WHEN 'DATABASE' THEN 2
+      WHEN 'DEFAULT' THEN 1
+      ELSE 0
+    END DESC"
+
+    {{ hana_hdbsql_bin | quote }} \
+      -U {{ hdbsql_userkey | quote }} \
+      -x -a -j \
+      "$SQL"
+  args:
+    executable: /bin/bash
+  become: true
+  become_user: "{{ hana_admin_user }}"
+  register: hana_log_mode_query
+  changed_when: false
+  failed_when: false
+  tags: [log_mode]
+
+- name: "BACKUP: parse SYSTEMDB log_mode"
+  ansible.builtin.set_fact:
+    hana_log_mode_value: >-
+      {{
+        hana_log_mode_query.stdout_lines
+        | default([])
+        | map('trim')
+        | reject('equalto', '')
+        | list
+        | first
+        | default('')
+      }}
+  tags: [log_mode]
+
+- name: "BACKUP: record SYSTEMDB log_mode result"
+  ansible.builtin.set_fact:
+    hana_check_results: >-
+      {{ hana_check_results + [{
+        'check': 'SYSTEMDB log_mode',
+        'status': (
+          'ERROR'
+          if (hana_log_mode_query.rc | default(99) | int) != 0
+          else (
+            'PASS'
+            if (
+              hana_log_mode_value | length > 0
+              and
+              (hana_log_mode_value | lower) ==
+              (expected_hana_log_mode | lower)
+            )
+            else 'WARN'
+          )
+        ),
+        'details': (
+          'Query failed; rc=' ~
+          (hana_log_mode_query.rc | default('unknown') | string) ~
+          (
+            '; stderr=' ~
+            (hana_log_mode_query.stderr | default('') | trim)
+            if hana_log_mode_query.stderr | default('') | trim | length > 0
+            else ''
+          )
+          if (hana_log_mode_query.rc | default(99) | int) != 0
+          else (
+            'Query completed but returned no log_mode row'
+            if hana_log_mode_value | length == 0
+            else (
+              'expected=' ~ expected_hana_log_mode ~
+              '; found=' ~ hana_log_mode_value ~
+              '; rc=' ~ (hana_log_mode_query.rc | string)
+            )
+          )
+        )
+      }] }}
+  tags: [log_mode]
+
+- name: "BACKUP: save log_mode raw output"
+  ansible.builtin.copy:
+    dest: "{{ host_raw_dir }}/log_mode.txt"
+    mode: "0644"
+    content: |
+      rc={{ hana_log_mode_query.rc | default('unknown') }}
+      stdout:
+      {{ hana_log_mode_query.stdout | default('') }}
+
+      stderr:
+      {{ hana_log_mode_query.stderr | default('') }}
+  delegate_to: localhost
+  become: false
+  when: save_raw_outputs | bool
+  tags: [log_mode]
+
+- name: "BACKUP: query SYSTEMDB log_backup_interval_mode"
+  ansible.builtin.shell: |
+    {{ hana_hdbsql_bin | quote }} \
+      -U {{ hdbsql_userkey | quote }} \
+      -x -a -j \
+      "SELECT LOG_BACKUP_INTERVAL_MODE
+       FROM SYS.M_BACKUP_CONFIGURATION"
+  args:
+    executable: /bin/bash
+  become: true
+  become_user: "{{ hana_admin_user }}"
+  register: hana_log_backup_interval_query
+  changed_when: false
+  failed_when: false
+  tags: [log_backup_interval_mode]
+
+- name: "BACKUP: parse SYSTEMDB log_backup_interval_mode"
+  ansible.builtin.set_fact:
+    hana_log_backup_interval_mode_value: >-
+      {{
+        hana_log_backup_interval_query.stdout_lines
+        | default([])
+        | map('trim')
+        | reject('equalto', '')
+        | list
+        | first
+        | default('')
+      }}
+  tags: [log_backup_interval_mode]
+
+- name: "BACKUP: record SYSTEMDB log_backup_interval_mode result"
+  ansible.builtin.set_fact:
+    hana_check_results: >-
+      {{ hana_check_results + [{
+        'check': 'SYSTEMDB log_backup_interval_mode',
+        'status': (
+          'ERROR'
+          if (hana_log_backup_interval_query.rc | default(99) | int) != 0
+          else (
+            'PASS'
+            if (
+              hana_log_backup_interval_mode_value | length > 0
+              and
+              (hana_log_backup_interval_mode_value | lower) ==
+              (expected_hana_log_backup_interval_mode | lower)
+            )
+            else 'WARN'
+          )
+        ),
+        'details': (
+          'Query failed; rc=' ~
+          (hana_log_backup_interval_query.rc |
+           default('unknown') | string) ~
+          (
+            '; stderr=' ~
+            (hana_log_backup_interval_query.stderr |
+             default('') | trim)
+            if hana_log_backup_interval_query.stderr |
+               default('') | trim | length > 0
+            else ''
+          )
+          if (hana_log_backup_interval_query.rc | default(99) | int) != 0
+          else (
+            'Query completed but returned no log_backup_interval_mode row'
+            if hana_log_backup_interval_mode_value | length == 0
+            else (
+              'expected=' ~ expected_hana_log_backup_interval_mode ~
+              '; found=' ~ hana_log_backup_interval_mode_value ~
+              '; rc=' ~ (hana_log_backup_interval_query.rc | string)
+            )
+          )
+        )
+      }] }}
+  tags: [log_backup_interval_mode]
+
+- name: "BACKUP: save log_backup_interval_mode raw output"
+  ansible.builtin.copy:
+    dest: "{{ host_raw_dir }}/log_backup_interval_mode.txt"
+    mode: "0644"
+    content: |
+      rc={{ hana_log_backup_interval_query.rc | default('unknown') }}
+      stdout:
+      {{ hana_log_backup_interval_query.stdout | default('') }}
+
+      stderr:
+      {{ hana_log_backup_interval_query.stderr | default('') }}
+  delegate_to: localhost
+  become: false
+  when: save_raw_outputs | bool
+  tags: [log_backup_interval_mode]
+
+- name: "BACKUP: query last successful SYSTEMDB data backup"  # noqa: risky-shell-pipe
+  ansible.builtin.shell: |
+    SQL="SELECT TOP 1
+      TO_NVARCHAR(SYS_START_TIME, 'YYYY-MM-DD HH24:MI:SS') ||
+      '|' || ENTRY_TYPE_NAME ||
+      '|' || STATE_NAME
+    FROM SYS.M_BACKUP_CATALOG
+    WHERE LOWER(STATE_NAME)='successful'
+      AND LOWER(ENTRY_TYPE_NAME) LIKE '%data backup%'
+    ORDER BY SYS_START_TIME DESC"
+
+    {{ hana_hdbsql_bin | quote }} \
+      -U {{ hdbsql_userkey | quote }} \
+      -x -a -j \
+      "$SQL"
+  args:
+    executable: /bin/bash
+  become: true
+  become_user: "{{ hana_admin_user }}"
+  register: hana_last_backup_query
+  changed_when: false
+  failed_when: false
+  tags: [last_successful_backup]
+
+- name: "BACKUP: parse last successful SYSTEMDB data backup"
+  ansible.builtin.set_fact:
+    hana_last_backup_row: >-
+      {{
+        hana_last_backup_query.stdout_lines
+        | default([])
+        | map('trim')
+        | reject('equalto', '')
+        | list
+        | first
+        | default('')
+      }}
+  tags: [last_successful_backup]
+
+- name: "BACKUP: record last successful SYSTEMDB backup result"
+  ansible.builtin.set_fact:
+    hana_check_results: >-
+      {{ hana_check_results + [{
+        'check': 'Last successful SYSTEMDB data backup',
+        'status': (
+          'ERROR'
+          if (hana_last_backup_query.rc | default(99) | int) != 0
+          else (
+            'PASS'
+            if hana_last_backup_row | length > 0
+            else 'WARN'
+          )
+        ),
+        'details': (
+          'Query failed; rc=' ~
+          (hana_last_backup_query.rc | default('unknown') | string) ~
+          (
+            '; stderr=' ~
+            (hana_last_backup_query.stderr | default('') | trim)
+            if hana_last_backup_query.stderr |
+               default('') | trim | length > 0
+            else ''
+          )
+          if (hana_last_backup_query.rc | default(99) | int) != 0
+          else (
+            hana_last_backup_row
+            if hana_last_backup_row | length > 0
+            else (
+              'Query completed successfully, but no successful '
+              'SYSTEMDB data-backup row was returned'
+            )
+          )
+        )
+      }] }}
+  tags: [last_successful_backup]
+
+- name: "BACKUP: save last successful backup raw output"
+  ansible.builtin.copy:
+    dest: "{{ host_raw_dir }}/last_successful_backup.txt"
+    mode: "0644"
+    content: |
+      rc={{ hana_last_backup_query.rc | default('unknown') }}
+      stdout:
+      {{ hana_last_backup_query.stdout | default('') }}
+
+      stderr:
+      {{ hana_last_backup_query.stderr | default('') }}
+  delegate_to: localhost
+  become: false
+  when: save_raw_outputs | bool
+  tags: [last_successful_backup]

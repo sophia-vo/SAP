@@ -1,0 +1,174 @@
+---
+# Read-only HANA health checks.
+# Tags: hana_version, services_green
+
+- name: "SYSTEM HEALTH: collect HANA version"
+  ansible.builtin.shell: |
+    source {{ hana_admin_home }}/.sapenv.sh 2>/dev/null || true
+    HDB version
+  args:
+    executable: /bin/bash
+  become: true
+  become_user: "{{ hana_admin_user }}"
+  register: hdb_version
+  changed_when: false
+  failed_when: false
+  tags: [hana_version]
+
+- name: "PARSE: extract HANA version"
+  ansible.builtin.set_fact:
+    hana_version_value: >-
+      {{
+        hdb_version.stdout_lines
+        | default([])
+        | select('match', '^\s*version\s*:')
+        | list
+        | first
+        | default('version not found')
+        | regex_replace('^\s*version\s*:\s*', '')
+      }}
+  tags: [hana_version]
+
+- name: "REPORT: record HANA version result"
+  ansible.builtin.set_fact:
+    hana_check_results: >-
+      {{ hana_check_results + [{
+        'check': 'HANA version command',
+        'status': (
+          'PASS'
+          if (hdb_version.rc | default(99) | int) == 0
+          else 'ERROR'
+        ),
+        'details': (
+          'version=' ~ hana_version_value ~
+          '; rc=' ~ (hdb_version.rc | default('unknown') | string) ~
+          (
+            '; stderr=' ~ (hdb_version.stderr | default('') | trim)
+            if hdb_version.stderr | default('') | trim | length > 0
+            else ''
+          )
+        )
+      }] }}
+  tags: [hana_version]
+
+- name: "SYSTEM HEALTH: collect HANA process list"
+  ansible.builtin.shell: |
+    source {{ hana_admin_home }}/.sapenv.sh 2>/dev/null || true
+    sapcontrol -nr {{ hana_instance_number }} -function GetProcessList
+  args:
+    executable: /bin/bash
+  become: true
+  become_user: "{{ hana_admin_user }}"
+  register: process_list
+  changed_when: false
+  failed_when: false
+  tags: [services_green]
+
+- name: "PARSE: sapcontrol process statuses"
+  ansible.builtin.set_fact:
+    hana_problem_service_lines: >-
+      {{
+        process_list.stdout_lines
+        | default([])
+        | select('search', '\b(RED|YELLOW|GRAY)\b')
+        | list
+      }}
+    hana_green_service_lines: >-
+      {{
+        process_list.stdout_lines
+        | default([])
+        | select('search', '\bGREEN\b')
+        | list
+      }}
+    sapcontrol_return_code_ok: >-
+      {{ process_list.rc | default(99) | int in [0, 3] }}
+    sapcontrol_output_ok: >-
+      {{
+        process_list.stdout_lines
+        | default([])
+        | select('match', '^\s*OK\s*$')
+        | list
+        | length > 0
+      }}
+  tags: [services_green]
+
+- name: "PARSE: determine HANA service health"
+  ansible.builtin.set_fact:
+    hana_services_green: >-
+      {{
+        sapcontrol_return_code_ok
+        and sapcontrol_output_ok
+        and hana_green_service_lines | length > 0
+        and hana_problem_service_lines | length == 0
+      }}
+  tags: [services_green]
+
+- name: "REPORT: record services result"
+  ansible.builtin.set_fact:
+    hana_check_results: >-
+      {{ hana_check_results + [{
+        'check': 'HANA services',
+        'status': (
+          'PASS'
+          if hana_services_green
+          else (
+            'ERROR'
+            if not sapcontrol_return_code_ok
+            else 'FAIL'
+          )
+        ),
+        'details': (
+          'All ' ~ (hana_green_service_lines | length | string) ~
+          ' reported services are GREEN; rc=' ~
+          (process_list.rc | string)
+          if hana_services_green
+          else (
+            'sapcontrol failed; rc=' ~
+            (process_list.rc | default('unknown') | string) ~
+            (
+              '; stderr=' ~
+              (process_list.stderr | default('') | trim)
+              if process_list.stderr | default('') | trim | length > 0
+              else ''
+            )
+            if not sapcontrol_return_code_ok
+            else (
+              'Non-GREEN services: ' ~
+              (hana_problem_service_lines | join('; '))
+            )
+          )
+        )
+      }] }}
+  tags: [services_green]
+
+- name: "SYSTEM HEALTH: save HANA version raw output"
+  ansible.builtin.copy:
+    dest: "{{ host_raw_dir }}/hdb_version.txt"
+    mode: "0644"
+    content: |
+      rc={{ hdb_version.rc | default('unknown') }}
+      stdout:
+      {{ hdb_version.stdout | default('') }}
+
+      stderr:
+      {{ hdb_version.stderr | default('') }}
+  delegate_to: localhost
+  become: false
+  when: save_raw_outputs | bool
+  tags: [hana_version]
+
+- name: "SYSTEM HEALTH: save process-list raw output"
+  ansible.builtin.copy:
+    dest: "{{ host_raw_dir }}/sapcontrol_process_list.txt"
+    mode: "0644"
+    content: |
+      rc={{ process_list.rc | default('unknown') }}
+      stdout:
+      {{ process_list.stdout | default('') }}
+
+      stderr:
+      {{ process_list.stderr | default('') }}
+  delegate_to: localhost
+  become: false
+  when: save_raw_outputs | bool
+  tags: [services_green]

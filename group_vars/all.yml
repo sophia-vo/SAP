@@ -1,0 +1,66 @@
+---
+# Shared read-only validation defaults for every generated inventory.
+aws_region: ""
+validation_batch_size: 50
+
+# Validation feature toggles. Applicability is controlled by generated host
+# component membership while these switches control optional check families.
+hana_validate_incrond: true
+hana_validate_backint: true
+hana_validate_security: true
+hana_validate_os_baseline: true
+hana_validate_sap_app: true
+hana_validate_monitoring: true
+hana_validate_cloud: false
+
+# Reporting / behavior.
+hana_strict_validation: false
+save_raw_outputs: false
+
+# Security checks.
+clamav_service_candidates:
+  - clamav-daemon.service
+  - clamd.service
+  - clamd@scan.service
+  - freshclam.service
+clamsap_package_candidates:
+  - clamsap
+  - clam-sap
+  - clamav-sap
+watchman_package_candidates:
+  - watchman
+cert_expiry_warn_days: 30
+
+# UTC and Etc/UTC are equivalent; the current server reports Etc/UTC.
+acceptable_timezones:
+  - UTC
+  - Etc/UTC
+
+# OS resource thresholds.
+disk_usage_warn_percent: 85
+disk_usage_fail_percent: 95
+memory_usage_warn_percent: 85
+memory_usage_fail_percent: 95
+
+# Default mount list for non-HANA hosts. Generated HANA host vars override it.
+hana_mounts_to_validate:
+  - /
+
+# HANA backup/configuration checks.
+hdbsql_userkey: ""  # Generated per HANA host from inputs/instances.csv.
+expected_hana_log_mode: normal
+expected_hana_log_backup_interval_mode: service
+backint_integration_path: "/usr/sap/{{ hana_sid }}/SYS/global/hdb/opt"
+
+# Monitoring. SAP Host Agent is intentionally excluded: it is not the
+# Diagnostics Agent / smdagent.
+diagnostic_agent_service_candidates:
+  - sapdaagent.service
+  - smdagent.service
+  - diagnostics-agent.service
+diagnostic_agent_process_pattern: "[s]mdagent|[d]iagnostics[.]agent"
+
+# AWS DLM validation is intentionally disabled until a real policy ID is
+# supplied. See tasks/cloud.yml and the usage guide.
+aws_instance_id: ""
+aws_dlm_policy_id: ""

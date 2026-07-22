@@ -1,0 +1,14 @@
+{
+  "connection": {
+    "ssh_port": 22,
+    "python_interpreter": "/usr/bin/python3.11",
+    "credential_profile": "sap-lab"
+  },
+  "execution": {
+    "batch_size": 50,
+    "forks": 50
+  },
+  "inventory": {
+    "host_agent_expected_by_default": true
+  }
+}

@@ -1,0 +1,15 @@
+---
+# FUTURE / DISABLED ON THE CURRENT SETUP
+#
+# AWS AMI/DLM validation is not imported by site.yml because no confirmed
+# aws_dlm_policy_id is available. Enable this only after the policy ID and
+# controller AWS credentials are supplied.
+#
+# Intended implementation:
+#   amazon.aws.dlm_lifecycle_policy_info or
+#   aws dlm get-lifecycle-policy --policy-id <policy-id> --region <region>
+#
+# The enabled implementation must verify:
+#   - policy State == ENABLED
+#   - PolicyType == IMAGE_MANAGEMENT
+#   - at least one schedule exists

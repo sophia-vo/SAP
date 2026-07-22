@@ -1,0 +1,90 @@
+---
+# Connectivity and privilege-escalation checks.
+# Tags: login, sudo_root, sudo_sidadm
+
+- name: "CHECK: Can login to VM"
+  ansible.builtin.ping:
+  register: login_check
+  tags: [login]
+
+- name: "REPORT: record login result"
+  ansible.builtin.set_fact:
+    hana_check_results: >-
+      {{ hana_check_results + [{
+        'check': 'SSH / Ansible login',
+        'status': 'PASS',
+        'details': 'Ansible ping returned: ' ~ (login_check.ping | default('unknown'))
+      }] }}
+  tags: [login]
+
+- name: "CHECK: Can become root"
+  ansible.builtin.command: whoami
+  become: true
+  become_user: root
+  register: root_check
+  changed_when: false
+  failed_when: false
+  tags: [sudo_root]
+
+- name: "ASSERT: sudo root works"
+  ansible.builtin.assert:
+    that: root_check.stdout == "root"
+    fail_msg: "Could not become root"
+    success_msg: "sudo to root OK"
+  tags: [sudo_root]
+
+- name: "REPORT: record sudo root result"
+  ansible.builtin.set_fact:
+    hana_check_results: >-
+      {{ hana_check_results + [{
+        'check': 'Become root',
+        'status': ('PASS' if root_check.stdout == 'root' else 'FAIL'),
+        'details': 'whoami returned: ' ~ (root_check.stdout | default('unknown'))
+      }] }}
+  tags: [sudo_root]
+
+- name: "SET: build SAP administrator list for this host"
+  ansible.builtin.set_fact:
+    validation_sid_admin_users: >-
+      {{
+        (
+          ([hana_admin_user] if inventory_hostname in (groups.get('hana_db', [])) else [])
+          + ([app_admin_user] if inventory_hostname in (groups.get('nw_app', [])) else [])
+        ) | unique | list
+      }}
+  tags: [sudo_sidadm]
+
+- name: "CHECK: Can become each SAP administrator"
+  ansible.builtin.command: whoami
+  become: true
+  become_user: "{{ item }}"
+  loop: "{{ validation_sid_admin_users }}"
+  loop_control:
+    label: "{{ item }}"
+  register: sidadm_checks
+  changed_when: false
+  failed_when: false
+  tags: [sudo_sidadm]
+
+- name: "ASSERT: sudo to each SAP administrator works"
+  ansible.builtin.assert:
+    that: item.stdout == item.item
+    fail_msg: "Could not become {{ item.item }}"
+    success_msg: "sudo to {{ item.item }} OK"
+  loop: "{{ sidadm_checks.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item }}"
+  tags: [sudo_sidadm]
+
+- name: "REPORT: record SAP administrator results"
+  ansible.builtin.set_fact:
+    hana_check_results: >-
+      {{ hana_check_results + [{
+        'check': 'Become ' ~ item.item,
+        'status': ('PASS' if item.stdout == item.item else 'FAIL'),
+        'details': 'whoami returned: ' ~ (item.stdout | default('unknown'))
+      }] }}
+  loop: "{{ sidadm_checks.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item }}"
+  tags: [sudo_sidadm]

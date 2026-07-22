@@ -1,0 +1,100 @@
+---
+# Read-only SAP Diagnostics Agent check.
+# SAP Host Agent is deliberately not treated as Diagnostics Agent.
+# Tag: diagnostic_agent
+
+- name: "MONITORING: gather service facts"
+  ansible.builtin.service_facts:
+  when: hana_validate_monitoring | bool
+  tags: [diagnostic_agent]
+
+- name: "MONITORING: initialize Diagnostics Agent matches"
+  ansible.builtin.set_fact:
+    diagnostic_agent_services: []
+    diagnostic_agent_running_services: []
+  when: hana_validate_monitoring | bool
+  tags: [diagnostic_agent]
+
+- name: "MONITORING: inspect Diagnostics Agent service candidates"
+  ansible.builtin.set_fact:
+    diagnostic_agent_services: "{{ diagnostic_agent_services + [item] }}"
+    diagnostic_agent_running_services: >-
+      {{
+        diagnostic_agent_running_services +
+        (
+          [item]
+          if (ansible_facts.services[item].state | default('')) == 'running'
+          else []
+        )
+      }}
+  loop: "{{ diagnostic_agent_service_candidates }}"
+  when:
+    - hana_validate_monitoring | bool
+    - ansible_facts.services[item] is defined
+  tags: [diagnostic_agent]
+
+- name: "MONITORING: inspect smdagent process"
+  ansible.builtin.shell: |
+    pgrep -af '{{ diagnostic_agent_process_pattern }}' || true
+  args:
+    executable: /bin/bash
+  register: diagnostic_agent_processes
+  changed_when: false
+  failed_when: false
+  when: hana_validate_monitoring | bool
+  tags: [diagnostic_agent]
+
+- name: "MONITORING: record Diagnostics Agent result"
+  ansible.builtin.set_fact:
+    hana_check_results: >-
+      {{ hana_check_results + [{
+        'check': 'SAP Diagnostics Agent',
+        'status': (
+          'PASS'
+          if (
+            diagnostic_agent_running_services | length > 0
+            or
+            diagnostic_agent_processes.stdout | trim | length > 0
+          )
+          else 'WARN'
+        ),
+        'details': (
+          'running services=' ~
+          (diagnostic_agent_running_services | join(', '))
+          if diagnostic_agent_running_services | length > 0
+          else (
+            'processes=' ~ (diagnostic_agent_processes.stdout | trim)
+            if diagnostic_agent_processes.stdout | trim | length > 0
+            else (
+              'installed but not running=' ~
+              (diagnostic_agent_services | join(', '))
+              if diagnostic_agent_services | length > 0
+              else 'No Diagnostics Agent service or smdagent process found'
+            )
+          )
+        )
+      }] }}
+  when: hana_validate_monitoring | bool
+  tags: [diagnostic_agent]
+
+- name: "MONITORING: save Diagnostics Agent raw evidence"
+  ansible.builtin.copy:
+    dest: "{{ host_raw_dir }}/diagnostics_agent.json"
+    mode: "0644"
+    content: >-
+      {{
+        {
+          'service_candidates': diagnostic_agent_service_candidates,
+          'services_found': diagnostic_agent_services | default([]),
+          'services_running':
+            diagnostic_agent_running_services | default([]),
+          'process_command': diagnostic_agent_processes | default({})
+        }
+        | to_nice_json
+      }}
+  delegate_to: localhost
+  become: false
+  when:
+    - hana_validate_monitoring | bool
+    - save_raw_outputs | bool
+  tags: [diagnostic_agent]

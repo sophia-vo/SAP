@@ -1,0 +1,171 @@
+---
+# Read-only HANA configuration-file checks.
+# Tags: tcp_backlog, sslminprotocolversion
+
+- name: "CONFIGURATION: stat global.ini"
+  ansible.builtin.stat:
+    path: "{{ global_ini_remote_path }}"
+  register: global_ini_stat
+  tags: [tcp_backlog, sslminprotocolversion]
+
+- name: "CONFIGURATION: read global.ini"
+  ansible.builtin.slurp:
+    src: "{{ global_ini_remote_path }}"
+  register: global_ini_raw
+  when: global_ini_stat.stat.exists
+  tags: [tcp_backlog, sslminprotocolversion]
+
+- name: "CONFIGURATION: decode global.ini"
+  ansible.builtin.set_fact:
+    global_ini_content: >-
+      {{
+        global_ini_raw.content | b64decode
+        if global_ini_raw.content is defined
+        else ''
+      }}
+  tags: [tcp_backlog, sslminprotocolversion]
+
+- name: "CONFIGURATION: save global.ini"
+  ansible.builtin.copy:
+    dest: "{{ host_raw_dir }}/global.ini"
+    mode: "0644"
+    content: "{{ global_ini_content }}"
+  delegate_to: localhost
+  become: false
+  when:
+    - global_ini_stat.stat.exists
+    - save_raw_outputs | bool
+  tags: [tcp_backlog, sslminprotocolversion]
+
+- name: "PARSE: global.ini parameter lines and values"
+  ansible.builtin.set_fact:
+    tcp_backlog_lines: >-
+      {{
+        global_ini_content
+        | regex_findall('(?im)^\s*tcp_backlog\s*=.*$')
+      }}
+    tcp_backlog_values: >-
+      {{
+        global_ini_content
+        | regex_findall('(?im)^\s*tcp_backlog\s*=\s*([^\s#]+)')
+      }}
+    sslminprotocolversion_lines: >-
+      {{
+        global_ini_content
+        | regex_findall(
+            '(?im)^\s*sslminprotocolversion\s*=.*$'
+          )
+      }}
+    sslminprotocolversion_values: >-
+      {{
+        global_ini_content
+        | regex_findall(
+            '(?im)^\s*sslminprotocolversion\s*=\s*([^\s#]+)'
+          )
+      }}
+  tags: [tcp_backlog, sslminprotocolversion]
+
+- name: "PARSE: evaluate global.ini parameter baselines"
+  ansible.builtin.set_fact:
+    tcp_backlog_line: >-
+      {{
+        tcp_backlog_lines | join('; ')
+        if tcp_backlog_lines | length > 0
+        else 'NOT SET'
+      }}
+    sslminprotocolversion_line: >-
+      {{
+        sslminprotocolversion_lines | join('; ')
+        if sslminprotocolversion_lines | length > 0
+        else 'NOT SET'
+      }}
+    tcp_backlog_ok: >-
+      {{
+        tcp_backlog_values | length > 0
+        and
+        (
+          tcp_backlog_values
+          | reject('equalto', '2048')
+          | list
+          | length
+        ) == 0
+      }}
+    sslminprotocolversion_ok: >-
+      {{
+        sslminprotocolversion_values | length > 0
+        and
+        (
+          sslminprotocolversion_values
+          | map('upper')
+          | reject('equalto', 'TLS12')
+          | list
+          | length
+        ) == 0
+      }}
+  tags: [tcp_backlog, sslminprotocolversion]
+
+- name: "REPORT: record global.ini readability"
+  ansible.builtin.set_fact:
+    hana_check_results: >-
+      {{ hana_check_results + [{
+        'check': 'global.ini readable',
+        'status': (
+          'PASS'
+          if global_ini_stat.stat.exists
+          else 'FAIL'
+        ),
+        'details': (
+          global_ini_remote_path
+          if global_ini_stat.stat.exists
+          else 'Missing: ' ~ global_ini_remote_path
+        )
+      }] }}
+  tags: [tcp_backlog, sslminprotocolversion]
+
+- name: "ASSERT STRICT: tcp_backlog = 2048"
+  ansible.builtin.assert:
+    that:
+      - tcp_backlog_ok | bool
+    fail_msg: >-
+      tcp_backlog is not set to 2048 in global.ini.
+      Found: {{ tcp_backlog_line }}
+    success_msg: "tcp_backlog = 2048 confirmed"
+  when: hana_strict_validation | bool
+  tags: [tcp_backlog]
+
+- name: "REPORT: record tcp_backlog baseline"
+  ansible.builtin.set_fact:
+    hana_check_results: >-
+      {{ hana_check_results + [{
+        'check': 'tcp_backlog baseline',
+        'status': ('PASS' if tcp_backlog_ok else 'WARN'),
+        'details': (
+          'Expected every tcp_backlog value to equal 2048; found ' ~
+          tcp_backlog_line
+        )
+      }] }}
+  tags: [tcp_backlog]
+
+- name: "ASSERT STRICT: sslminprotocolversion = TLS12"
+  ansible.builtin.assert:
+    that:
+      - sslminprotocolversion_ok | bool
+    fail_msg: >-
+      sslminprotocolversion is not TLS12 in global.ini.
+      Found: {{ sslminprotocolversion_line }}
+    success_msg: "sslminprotocolversion = TLS12 confirmed"
+  when: hana_strict_validation | bool
+  tags: [sslminprotocolversion]
+
+- name: "REPORT: record sslminprotocolversion baseline"
+  ansible.builtin.set_fact:
+    hana_check_results: >-
+      {{ hana_check_results + [{
+        'check': 'sslminprotocolversion baseline',
+        'status': ('PASS' if sslminprotocolversion_ok else 'WARN'),
+        'details': (
+          'Expected every sslminprotocolversion value to equal TLS12; found ' ~
+          sslminprotocolversion_line
+        )
+      }] }}
+  tags: [sslminprotocolversion]

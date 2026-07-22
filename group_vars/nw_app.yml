@@ -1,0 +1,6 @@
+---
+# Generic defaults for hosts that contain an ABAP/S4H application instance.
+# SID-, instance-, path-, and administrator-specific values are generated as
+# host variables from inputs/instances.csv.
+
+app_db_schema: ""

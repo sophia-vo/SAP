@@ -1,0 +1,5 @@
+server_id,component,sid,instance_number,instance_name,virtual_hostname,admin_user,role,tenant,userstore_key,hdbsql_bin,profile_dir,default_pfl_path,db_schema
+sap-sandbox-01,hana,HDB,02,HDB02,vhcalhdbdb,hdbadm,primary,S4H,HDB_KEY_CAL,,,,
+sap-sandbox-01,abap,S4H,00,D00,vhcals4hci,s4hadm,dialog,,DEFAULT,,,,
+sap-sandbox-01,ascs,S4H,01,ASCS01,vhcals4hcs,s4hadm,central,,,,,,
+sap-sandbox-01,webdispatcher,S4H,01,,vhcals4hcs,s4hadm,,,,,,,

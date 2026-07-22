@@ -1,0 +1,374 @@
+---
+# Read-only security checks.
+# Tags: clamav, clamsap, watchman, cert_expiry
+
+- name: "SECURITY: gather service facts"
+  ansible.builtin.service_facts:
+  when: hana_validate_security | bool
+  tags: [clamav]
+
+- name: "SECURITY: initialize ClamAV service matches"
+  ansible.builtin.set_fact:
+    clamav_present_services: []
+    clamav_running_services: []
+  when: hana_validate_security | bool
+  tags: [clamav]
+
+- name: "SECURITY: identify ClamAV services"
+  ansible.builtin.set_fact:
+    clamav_present_services: "{{ clamav_present_services + [item] }}"
+    clamav_running_services: >-
+      {{
+        clamav_running_services +
+        (
+          [item]
+          if (ansible_facts.services[item].state | default('')) == 'running'
+          else []
+        )
+      }}
+  loop: "{{ clamav_service_candidates }}"
+  when:
+    - hana_validate_security | bool
+    - ansible_facts.services[item] is defined
+  tags: [clamav]
+
+- name: "SECURITY: record ClamAV result"
+  ansible.builtin.set_fact:
+    hana_check_results: >-
+      {{ hana_check_results + [{
+        'check': 'ClamAV service running',
+        'status': (
+          'PASS'
+          if clamav_running_services | length > 0
+          else 'WARN'
+        ),
+        'details': (
+          'running=' ~ (clamav_running_services | join(', '))
+          if clamav_running_services | length > 0
+          else (
+            'installed but not running=' ~
+            (clamav_present_services | join(', '))
+            if clamav_present_services | length > 0
+            else 'No candidate ClamAV service was found'
+          )
+        )
+      }] }}
+  when: hana_validate_security | bool
+  tags: [clamav]
+
+- name: "SECURITY: gather installed package facts"
+  ansible.builtin.package_facts:
+    manager: auto
+  failed_when: false
+  when: hana_validate_security | bool
+  tags: [clamsap, watchman]
+
+- name: "SECURITY: identify installed ClamSAP packages"
+  ansible.builtin.set_fact:
+    clamsap_installed_packages: >-
+      {{
+        (
+          clamsap_package_candidates |
+          intersect((ansible_facts.packages | default({})).keys() | list)
+        )
+        +
+        (
+          ansible_facts.packages | default({}) | dict2items
+          | selectattr('key', 'search', '(?i)clam.*sap|sap.*clam')
+          | map(attribute='key')
+          | list
+        )
+        | unique
+        | list
+      }}
+  when: hana_validate_security | bool
+  tags: [clamsap]
+
+- name: "SECURITY: record ClamSAP result"
+  ansible.builtin.set_fact:
+    hana_check_results: >-
+      {{ hana_check_results + [{
+        'check': 'ClamSAP installed',
+        'status': (
+          'PASS'
+          if clamsap_installed_packages | length > 0
+          else 'WARN'
+        ),
+        'details': (
+          'packages=' ~ (clamsap_installed_packages | join(', '))
+          if clamsap_installed_packages | length > 0
+          else 'No ClamSAP package was found'
+        )
+      }] }}
+  when: hana_validate_security | bool
+  tags: [clamsap]
+
+- name: "SECURITY: locate Watchman binary"
+  ansible.builtin.command: /bin/bash -lc "command -v watchman"
+  register: watchman_command
+  changed_when: false
+  failed_when: false
+  when: hana_validate_security | bool
+  tags: [watchman]
+
+- name: "SECURITY: identify Watchman package"
+  ansible.builtin.set_fact:
+    watchman_installed_packages: >-
+      {{
+        watchman_package_candidates |
+        intersect((ansible_facts.packages | default({})).keys() | list)
+      }}
+  when: hana_validate_security | bool
+  tags: [watchman]
+
+- name: "SECURITY: record Watchman result"
+  ansible.builtin.set_fact:
+    hana_check_results: >-
+      {{ hana_check_results + [{
+        'check': 'Watchman installed',
+        'status': (
+          'PASS'
+          if (
+            watchman_command.stdout | trim | length > 0
+            or
+            watchman_installed_packages | length > 0
+          )
+          else 'WARN'
+        ),
+        'details': (
+          'binary=' ~ (watchman_command.stdout | trim)
+          if watchman_command.stdout | trim | length > 0
+          else (
+            'packages=' ~ (watchman_installed_packages | join(', '))
+            if watchman_installed_packages | length > 0
+            else 'Watchman binary/package not found'
+          )
+        )
+      }] }}
+  when: hana_validate_security | bool
+  tags: [watchman]
+
+- name: "SECURITY: save antivirus and Watchman evidence"
+  ansible.builtin.copy:
+    dest: "{{ host_raw_dir }}/security_software.json"
+    mode: "0644"
+    content: >-
+      {{
+        {
+          'clamav_candidates': clamav_service_candidates,
+          'clamav_present_services': clamav_present_services | default([]),
+          'clamav_running_services': clamav_running_services | default([]),
+          'clamsap_candidates': clamsap_package_candidates,
+          'clamsap_installed_packages':
+            clamsap_installed_packages | default([]),
+          'watchman_command': watchman_command | default({}),
+          'watchman_installed_packages':
+            watchman_installed_packages | default([])
+        }
+        | to_nice_json
+      }}
+  delegate_to: localhost
+  become: false
+  when:
+    - hana_validate_security | bool
+    - save_raw_outputs | bool
+  tags: [clamav, clamsap, watchman]
+
+- name: "SECURITY: stat configured certificate files"
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ tls_cert_paths | default([]) }}"
+  register: security_cert_stats
+  when: hana_validate_security | bool
+  tags: [cert_expiry]
+
+- name: "SECURITY: inspect configured certificates"  # noqa: risky-shell-pipe
+  ansible.builtin.shell: |
+    source {{ app_admin_home }}/.sapenv.sh 2>/dev/null || true
+    cert_path={{ item.item | quote }}
+    warning_seconds={{ (cert_expiry_warn_days | int) * 86400 }}
+    temporary_certificate=""
+
+    cleanup() {
+      if [ -n "$temporary_certificate" ]; then
+        rm -f "$temporary_certificate"
+      fi
+    }
+    trap cleanup EXIT
+
+    certificate_input="$cert_path"
+
+    case "$cert_path" in
+      *.pse|*.PSE)
+        if ! command -v sapgenpse >/dev/null 2>&1; then
+          echo "ERROR: sapgenpse was not found"
+          exit 20
+        fi
+
+        temporary_certificate="$(mktemp)"
+        if ! export_output="$(
+          sapgenpse export_own_cert \
+            -o "$temporary_certificate" \
+            -p "$cert_path" </dev/null 2>&1
+        )"; then
+          echo "ERROR: could not export certificate from PSE"
+          echo "$export_output"
+          exit 20
+        fi
+
+        certificate_input="$temporary_certificate"
+        ;;
+    esac
+
+    if ! certificate_details="$(
+      openssl x509 \
+        -in "$certificate_input" \
+        -noout \
+        -subject \
+        -issuer \
+        -startdate \
+        -enddate \
+        -fingerprint \
+        -sha256 2>&1
+    )"; then
+      echo "ERROR: certificate could not be parsed"
+      echo "$certificate_details"
+      exit 20
+    fi
+
+    echo "path=$cert_path"
+    echo "$certificate_details"
+
+    if openssl x509 \
+      -in "$certificate_input" \
+      -noout \
+      -checkend "$warning_seconds" >/dev/null 2>&1; then
+      exit 0
+    fi
+
+    exit 10
+  args:
+    executable: /bin/bash
+  become: true
+  become_user: "{{ tls_cert_become_user }}"
+  loop: "{{ security_cert_stats.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when:
+    - hana_validate_security | bool
+    - item.stat.exists | default(false)
+  register: security_cert_validation
+  changed_when: false
+  failed_when: false
+  tags: [cert_expiry]
+
+- name: "SECURITY: summarize certificate results"
+  ansible.builtin.set_fact:
+    cert_missing_paths: >-
+      {{
+        security_cert_stats.results
+        | default([])
+        | selectattr('stat.exists', 'defined')
+        | selectattr('stat.exists', 'equalto', false)
+        | map(attribute='item')
+        | list
+      }}
+    cert_expiring_count: >-
+      {{
+        security_cert_validation.results
+        | default([])
+        | rejectattr('skipped', 'defined')
+        | selectattr('rc', 'equalto', 10)
+        | list
+        | length
+      }}
+    cert_error_count: >-
+      {{
+        security_cert_validation.results
+        | default([])
+        | rejectattr('skipped', 'defined')
+        | rejectattr('rc', 'equalto', 0)
+        | rejectattr('rc', 'equalto', 10)
+        | list
+        | length
+      }}
+    cert_expiry_details: >-
+      {{
+        security_cert_validation.results
+        | default([])
+        | rejectattr('skipped', 'defined')
+        | map(attribute='stdout')
+        | select
+        | list
+        | join(' | ')
+      }}
+  when: hana_validate_security | bool
+  tags: [cert_expiry]
+
+- name: "SECURITY: record certificate expiry result"
+  ansible.builtin.set_fact:
+    hana_check_results: >-
+      {{ hana_check_results + [{
+        'check': 'Certificate expiry',
+        'status': (
+          'SKIPPED'
+          if tls_cert_paths | default([]) | length == 0
+          else (
+            'FAIL'
+            if cert_missing_paths | length > 0
+            else (
+              'ERROR'
+              if cert_error_count | int > 0
+              else (
+                'WARN'
+                if cert_expiring_count | int > 0
+                else 'PASS'
+              )
+            )
+          )
+        ),
+        'details': (
+          'No tls_cert_paths configured'
+          if tls_cert_paths | default([]) | length == 0
+          else (
+            'Missing=' ~ (cert_missing_paths | join(', '))
+            if cert_missing_paths | length > 0
+            else (
+              'Certificate inspection failed; ' ~ cert_expiry_details
+              if cert_error_count | int > 0
+              else (
+                'Expires within ' ~
+                (cert_expiry_warn_days | string) ~
+                ' days; ' ~ cert_expiry_details
+                if cert_expiring_count | int > 0
+                else (
+                  'Valid beyond ' ~
+                  (cert_expiry_warn_days | string) ~
+                  ' days; ' ~ cert_expiry_details
+                )
+              )
+            )
+          )
+        )
+      }] }}
+  when: hana_validate_security | bool
+  tags: [cert_expiry]
+
+- name: "SECURITY: save certificate validation raw evidence"
+  ansible.builtin.copy:
+    dest: "{{ host_raw_dir }}/certificate_validation.json"
+    mode: "0644"
+    content: >-
+      {{
+        {
+          'stats': security_cert_stats | default({}),
+          'validation': security_cert_validation | default({})
+        }
+        | to_nice_json
+      }}
+  delegate_to: localhost
+  become: false
+  when:
+    - hana_validate_security | bool
+    - save_raw_outputs | bool
+  tags: [cert_expiry]

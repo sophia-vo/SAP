@@ -1,0 +1,383 @@
+---
+# SAP application and SQL-backed reporting checks.
+# Tags: default_pfl_icm_ports, cvers_report, hana_license
+
+- name: "SAP APP: read DEFAULT.PFL"
+  ansible.builtin.slurp:
+    src: "{{ app_default_pfl_remote_path }}"
+  become: true
+  become_user: "{{ app_admin_user }}"
+  register: default_pfl_raw
+  failed_when: false
+  when:
+    - hana_validate_sap_app | bool
+    - inventory_hostname in (groups.get('nw_app', []))
+  tags: [default_pfl_icm_ports]
+
+- name: "SAP APP: parse DEFAULT.PFL ICM port values"
+  ansible.builtin.set_fact:
+    default_pfl_found: "{{ default_pfl_raw.content is defined }}"
+    default_pfl_content: >-
+      {{
+        (default_pfl_raw.content | b64decode)
+        if default_pfl_raw.content is defined
+        else ''
+      }}
+    default_pfl_icm_port_lines: >-
+      {{
+        (
+          (default_pfl_raw.content | b64decode)
+          if default_pfl_raw.content is defined
+          else ''
+        )
+        | regex_findall('(?im)^\s*icm/server_port_[0-9]+\s*=.*$')
+      }}
+  when:
+    - hana_validate_sap_app | bool
+    - inventory_hostname in (groups.get('nw_app', []))
+  tags: [default_pfl_icm_ports]
+
+- name: "SAP APP: save DEFAULT.PFL"
+  ansible.builtin.copy:
+    dest: "{{ host_raw_dir }}/DEFAULT.PFL"
+    mode: "0644"
+    content: "{{ default_pfl_content }}"
+  delegate_to: localhost
+  become: false
+  when:
+    - hana_validate_sap_app | bool
+    - inventory_hostname in (groups.get('nw_app', []))
+    - default_pfl_found | bool
+    - save_raw_outputs | bool
+  tags: [default_pfl_icm_ports]
+
+- name: "SAP APP: record DEFAULT.PFL ICM port result"
+  ansible.builtin.set_fact:
+    hana_check_results: >-
+      {{ hana_check_results + [{
+        'check': 'DEFAULT.PFL ICM ports',
+        'status': (
+          'PASS'
+          if default_pfl_found and default_pfl_icm_port_lines | length > 0
+          else 'WARN'
+        ),
+        'details': (
+          default_pfl_icm_port_lines | join('; ')
+          if default_pfl_icm_port_lines | length > 0
+          else (
+            'No icm/server_port_* entries found in ' ~
+            app_default_pfl_remote_path
+          )
+        )
+      }] }}
+  when:
+    - hana_validate_sap_app | bool
+    - inventory_hostname in (groups.get('nw_app', []))
+  tags: [default_pfl_icm_ports]
+
+- name: "SAP APP: discover tenant schema containing CVERS"
+  ansible.builtin.shell: |
+    {{ app_hdbsql_bin | quote }} \
+      -U {{ app_hdbsql_userkey | quote }} \
+      -x -a -j \
+      "SELECT TOP 1 SCHEMA_NAME
+       FROM SYS.TABLES
+       WHERE TABLE_NAME='CVERS'
+         AND SCHEMA_NAME NOT LIKE '_SYS%'
+       ORDER BY SCHEMA_NAME"
+  args:
+    executable: /bin/bash
+  become: true
+  become_user: "{{ app_admin_user }}"
+  register: cvers_schema_query
+  changed_when: false
+  failed_when: false
+  when:
+    - hana_validate_sap_app | bool
+    - inventory_hostname in (groups.get('nw_app', []))
+  tags: [cvers_report]
+
+- name: "SAP APP: select CVERS schema"
+  ansible.builtin.set_fact:
+    cvers_schema_effective: >-
+      {{
+        app_db_schema
+        if app_db_schema | length > 0
+        else (
+          cvers_schema_query.stdout_lines
+          | default([])
+          | map('trim')
+          | reject('equalto', '')
+          | list
+          | first
+          | default('')
+        )
+      }}
+  when:
+    - hana_validate_sap_app | bool
+    - inventory_hostname in (groups.get('nw_app', []))
+  tags: [cvers_report]
+
+- name: "SAP APP: query CVERS add-on and component versions"  # noqa: risky-shell-pipe
+  ansible.builtin.shell: |
+    SQL="SELECT
+      COMPONENT || '|' ||
+      RELEASE || '|' ||
+      COALESCE(EXTRELEASE, '') || '|' ||
+      COMP_TYPE
+    FROM \"{{ cvers_schema_effective }}\".\"CVERS\"
+    ORDER BY COMPONENT"
+
+    {{ app_hdbsql_bin | quote }} \
+      -U {{ app_hdbsql_userkey | quote }} \
+      -x -a -j \
+      "$SQL"
+
+  args:
+    executable: /bin/bash
+  become: true
+  become_user: "{{ app_admin_user }}"
+  register: cvers_report_query
+  changed_when: false
+  failed_when: false
+  when:
+    - hana_validate_sap_app | bool
+    - inventory_hostname in (groups.get('nw_app', []))
+    - cvers_schema_effective | length > 0
+  tags: [cvers_report]
+
+- name: "SAP APP: record CVERS result"
+  ansible.builtin.set_fact:
+    hana_check_results: >-
+      {{ hana_check_results + [{
+        'check': 'CVERS add-on/version report',
+        'status': (
+          'ERROR'
+          if (
+            app_db_schema | length == 0
+            and
+            (cvers_schema_query.rc | default(99) | int) != 0
+          )
+          else (
+            'WARN'
+            if cvers_schema_effective | length == 0
+            else (
+              'ERROR'
+              if (cvers_report_query.rc | default(99) | int) != 0
+              else (
+                'PASS'
+                if cvers_report_query.stdout |
+                   default('') | trim | length > 0
+                else 'WARN'
+              )
+            )
+          )
+        ),
+        'details': (
+          'CVERS schema discovery failed; rc=' ~
+          (cvers_schema_query.rc | default('unknown') | string) ~
+          (
+            '; stderr=' ~
+            (cvers_schema_query.stderr | default('') | trim)
+            if cvers_schema_query.stderr |
+               default('') | trim | length > 0
+            else ''
+          )
+          if (
+            app_db_schema | length == 0
+            and
+            (cvers_schema_query.rc | default(99) | int) != 0
+          )
+          else (
+            'No accessible schema containing CVERS was found'
+            if cvers_schema_effective | length == 0
+            else (
+              'CVERS query failed; schema=' ~ cvers_schema_effective ~
+              '; rc=' ~
+              (cvers_report_query.rc | default('unknown') | string) ~
+              (
+                '; stderr=' ~
+                (cvers_report_query.stderr | default('') | trim)
+                if cvers_report_query.stderr |
+                   default('') | trim | length > 0
+                else ''
+              )
+              if (cvers_report_query.rc | default(99) | int) != 0
+              else (
+                cvers_report_query.stdout | trim
+                if cvers_report_query.stdout |
+                   default('') | trim | length > 0
+                else (
+                  'CVERS query completed successfully, but returned no rows; '
+                  'schema=' ~ cvers_schema_effective
+                )
+              )
+            )
+          )
+        )
+      }] }}
+  when:
+    - hana_validate_sap_app | bool
+    - inventory_hostname in (groups.get('nw_app', []))
+  tags: [cvers_report]
+
+- name: "SAP APP: save CVERS raw output"
+  ansible.builtin.copy:
+    dest: "{{ host_raw_dir }}/cvers_report.txt"
+    mode: "0644"
+    content: |
+      schema_discovery_rc={{ cvers_schema_query.rc | default('unknown') }}
+      schema={{ cvers_schema_effective | default('') }}
+      query_rc={{ cvers_report_query.rc | default('not run') }}
+
+      stdout:
+      {{ cvers_report_query.stdout | default('') }}
+
+      stderr:
+      {{
+        cvers_report_query.stderr |
+        default(cvers_schema_query.stderr | default(''))
+      }}
+  delegate_to: localhost
+  become: false
+  when:
+    - hana_validate_sap_app | bool
+    - inventory_hostname in (groups.get('nw_app', []))
+    - save_raw_outputs | bool
+  tags: [cvers_report]
+
+- name: "SAP APP: query HANA license status"  # noqa: risky-shell-pipe
+  ansible.builtin.shell: |
+    SQL="SELECT TOP 1
+      TO_NVARCHAR(PERMANENT) ||
+      '|' || TO_NVARCHAR(VALID) ||
+      '|' || TO_NVARCHAR(ENFORCED) ||
+      '|' || TO_NVARCHAR(LOCKED) ||
+      '|' || COALESCE(
+        TO_NVARCHAR(EXPIRATION_DATE, 'YYYY-MM-DD HH24:MI:SS'),
+        ''
+      )
+    FROM SYS.M_LICENSES
+    ORDER BY EXPIRATION_DATE DESC"
+
+    {{ hana_hdbsql_bin | quote }} \
+      -U {{ hdbsql_userkey | quote }} \
+      -x -a -j \
+      "$SQL"
+  args:
+    executable: /bin/bash
+  become: true
+  become_user: "{{ hana_admin_user }}"
+  register: hana_license_query
+  changed_when: false
+  failed_when: false
+  when:
+    - hana_validate_sap_app | bool
+    - inventory_hostname in (groups.get('hana_db', []))
+  tags: [hana_license]
+
+- name: "SAP APP: parse HANA license row"
+  ansible.builtin.set_fact:
+    hana_license_row: >-
+      {{
+        hana_license_query.stdout_lines
+        | default([])
+        | map('trim')
+        | reject('equalto', '')
+        | list
+        | first
+        | default('')
+      }}
+  when:
+    - hana_validate_sap_app | bool
+    - inventory_hostname in (groups.get('hana_db', []))
+  tags: [hana_license]
+
+- name: "SAP APP: split HANA license fields"
+  ansible.builtin.set_fact:
+    hana_license_fields: >-
+      {{
+        hana_license_row.split('|') | map('trim') | list
+        if hana_license_row | length > 0
+        else []
+      }}
+  when:
+    - hana_validate_sap_app | bool
+    - inventory_hostname in (groups.get('hana_db', []))
+  tags: [hana_license]
+
+- name: "SAP APP: record HANA license result"
+  ansible.builtin.set_fact:
+    hana_check_results: >-
+      {{ hana_check_results + [{
+        'check': 'HANA license SQL report',
+        'status': (
+          'ERROR'
+          if (hana_license_query.rc | default(99) | int) != 0
+          else (
+            'WARN'
+            if hana_license_fields | length < 5
+            else (
+              'FAIL'
+              if (
+                (hana_license_fields[1] | upper) != 'TRUE'
+                or
+                (hana_license_fields[3] | upper) == 'TRUE'
+              )
+              else (
+                'WARN'
+                if (hana_license_fields[0] | upper) != 'TRUE'
+                else 'PASS'
+              )
+            )
+          )
+        ),
+        'details': (
+          'SYS.M_LICENSES query failed; rc=' ~
+          (hana_license_query.rc | default('unknown') | string) ~
+          (
+            '; stderr=' ~
+            (hana_license_query.stderr | default('') | trim)
+            if hana_license_query.stderr |
+               default('') | trim | length > 0
+            else ''
+          )
+          if (hana_license_query.rc | default(99) | int) != 0
+          else (
+            'SYS.M_LICENSES returned no usable license row'
+            if hana_license_fields | length < 5
+            else (
+              'permanent=' ~ hana_license_fields[0] ~
+              '; valid=' ~ hana_license_fields[1] ~
+              '; enforced=' ~ hana_license_fields[2] ~
+              '; locked=' ~ hana_license_fields[3] ~
+              '; expiration=' ~ hana_license_fields[4]
+            )
+          )
+        )
+      }] }}
+  when:
+    - hana_validate_sap_app | bool
+    - inventory_hostname in (groups.get('hana_db', []))
+  tags: [hana_license]
+
+- name: "SAP APP: save HANA license raw output"
+  ansible.builtin.copy:
+    dest: "{{ host_raw_dir }}/hana_license.txt"
+    mode: "0644"
+    content: |
+      rc={{ hana_license_query.rc | default('unknown') }}
+      parsed={{ hana_license_row | default('') }}
+
+      stdout:
+      {{ hana_license_query.stdout | default('') }}
+
+      stderr:
+      {{ hana_license_query.stderr | default('') }}
+  delegate_to: localhost
+  become: false
+  when:
+    - hana_validate_sap_app | bool
+    - inventory_hostname in (groups.get('hana_db', []))
+    - save_raw_outputs | bool
+  tags: [hana_license]

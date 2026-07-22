@@ -1,0 +1,359 @@
+---
+# Read-only OS baseline checks.
+# Tags: timezone_utc, disk_usage, memory_usage, os_facts_snapshot
+
+- name: "OS BASELINE: read configured timezone"
+  ansible.builtin.command:
+    argv:
+      - timedatectl
+      - show
+      - --property=Timezone
+      - --value
+  register: timezone_probe
+  changed_when: false
+  failed_when: false
+  when: hana_validate_os_baseline | bool
+  tags: [timezone_utc]
+
+- name: "OS BASELINE: record timezone result"
+  ansible.builtin.set_fact:
+    hana_check_results: >-
+      {{ hana_check_results + [{
+        'check': 'Timezone is UTC',
+        'status': (
+          'PASS'
+          if (
+            timezone_probe.rc | default(1) | int == 0
+            and
+            timezone_probe.stdout | default('') | trim in acceptable_timezones
+          )
+          else (
+            'ERROR'
+            if timezone_probe.rc | default(1) | int != 0
+            else 'WARN'
+          )
+        ),
+        'details': (
+          'expected one of=' ~ (acceptable_timezones | join(', ')) ~
+          '; actual=' ~
+          (timezone_probe.stdout | default('unknown') | trim) ~
+          (
+            '; error=' ~ (timezone_probe.stderr | default('') | trim)
+            if timezone_probe.rc | default(1) | int != 0
+            else ''
+          )
+        )
+      }] }}
+  when: hana_validate_os_baseline | bool
+  tags: [timezone_utc]
+
+- name: "OS BASELINE: save timezone raw evidence"
+  ansible.builtin.copy:
+    dest: "{{ host_raw_dir }}/timezone.txt"
+    mode: "0644"
+    content: |
+      rc={{ timezone_probe.rc | default('unknown') }}
+      timezone={{ timezone_probe.stdout | default('') | trim }}
+      stderr={{ timezone_probe.stderr | default('') | trim }}
+  delegate_to: localhost
+  become: false
+  when:
+    - hana_validate_os_baseline | bool
+    - save_raw_outputs | bool
+  tags: [timezone_utc]
+
+- name: "OS BASELINE: initialize disk usage results"
+  ansible.builtin.set_fact:
+    hana_disk_usage_results: []
+  when: hana_validate_os_baseline | bool
+  tags: [disk_usage]
+
+- name: "OS BASELINE: calculate disk usage percentages"
+  ansible.builtin.set_fact:
+    hana_disk_usage_results: >-
+      {{
+        hana_disk_usage_results + [{
+          'mount': item.mount,
+          'total_bytes': item.size_total | int,
+          'available_bytes': item.size_available | int,
+          'used_percent': (
+            (
+              (
+                (item.size_total | float) -
+                (item.size_available | float)
+              ) /
+              (item.size_total | float)
+            ) * 100
+          ) | round(2)
+        }]
+      }}
+  loop: "{{ ansible_mounts | default([]) }}"
+  loop_control:
+    label: "{{ item.mount }}"
+  when:
+    - hana_validate_os_baseline | bool
+    - item.mount in hana_mounts_to_validate
+    - item.size_total | int > 0
+  tags: [disk_usage]
+
+- name: "OS BASELINE: classify disk usage"
+  ansible.builtin.set_fact:
+    hana_disk_missing_mounts: >-
+      {{
+        hana_mounts_to_validate
+        | difference(
+            hana_disk_usage_results
+            | map(attribute='mount')
+            | list
+          )
+      }}
+    hana_disk_warning_results: >-
+      {{
+        hana_disk_usage_results
+        | selectattr(
+            'used_percent',
+            'ge',
+            disk_usage_warn_percent | float
+          )
+        | list
+      }}
+    hana_disk_failure_results: >-
+      {{
+        hana_disk_usage_results
+        | selectattr(
+            'used_percent',
+            'ge',
+            disk_usage_fail_percent | float
+          )
+        | list
+      }}
+  when: hana_validate_os_baseline | bool
+  tags: [disk_usage]
+
+- name: "OS BASELINE: record disk usage result"
+  ansible.builtin.set_fact:
+    hana_check_results: >-
+      {{ hana_check_results + [{
+        'check': 'Disk usage',
+        'status': (
+          'ERROR'
+          if hana_disk_missing_mounts | length > 0
+          else (
+            'FAIL'
+            if hana_disk_failure_results | length > 0
+            else (
+              'WARN'
+              if hana_disk_warning_results | length > 0
+              else 'PASS'
+            )
+          )
+        ),
+        'details': (
+          'Missing mount facts=' ~
+          (hana_disk_missing_mounts | join(', '))
+          if hana_disk_missing_mounts | length > 0
+          else (hana_disk_usage_results | to_json)
+        )
+      }] }}
+  when: hana_validate_os_baseline | bool
+  tags: [disk_usage]
+
+- name: "OS BASELINE: save disk usage raw output"
+  ansible.builtin.copy:
+    dest: "{{ host_raw_dir }}/disk_usage.txt"
+    mode: "0644"
+    content: |
+      warn_threshold={{ disk_usage_warn_percent }}
+      fail_threshold={{ disk_usage_fail_percent }}
+      {% for disk in hana_disk_usage_results %}
+      {{ disk.mount }} used={{ disk.used_percent }}% total={{ disk.total_bytes }} available={{ disk.available_bytes }}
+      {% endfor %}
+  delegate_to: localhost
+  become: false
+  when:
+    - hana_validate_os_baseline | bool
+    - save_raw_outputs | bool
+  tags: [disk_usage]
+
+- name: "OS BASELINE: collect memory usage"
+  ansible.builtin.command:
+    argv:
+      - free
+      - -m
+  register: memory_usage_command
+  changed_when: false
+  failed_when: false
+  when: hana_validate_os_baseline | bool
+  tags: [memory_usage]
+
+- name: "OS BASELINE: locate memory result row"
+  ansible.builtin.set_fact:
+    memory_usage_row: >-
+      {{
+        memory_usage_command.stdout_lines
+        | default([])
+        | select('match', '^\s*Mem:')
+        | list
+        | first
+        | default('')
+      }}
+  when: hana_validate_os_baseline | bool
+  tags: [memory_usage]
+
+- name: "OS BASELINE: split memory result fields"
+  ansible.builtin.set_fact:
+    memory_usage_fields: >-
+      {{
+        memory_usage_row.split()
+        if memory_usage_row | length > 0
+        else []
+      }}
+  when: hana_validate_os_baseline | bool
+  tags: [memory_usage]
+
+- name: "OS BASELINE: calculate memory percentage"
+  ansible.builtin.set_fact:
+    memory_total_mb: >-
+      {{
+        memory_usage_fields[1] | int
+        if memory_usage_fields | length >= 7
+        else 0
+      }}
+    memory_used_mb: >-
+      {{
+        memory_usage_fields[2] | int
+        if memory_usage_fields | length >= 7
+        else 0
+      }}
+    memory_available_mb: >-
+      {{
+        memory_usage_fields[6] | int
+        if memory_usage_fields | length >= 7
+        else 0
+      }}
+    memory_used_percent: >-
+      {{
+        (
+          (
+            (memory_usage_fields[2] | float) /
+            (memory_usage_fields[1] | float)
+          ) * 100
+        ) | round(2)
+        if (
+          memory_usage_fields | length >= 7
+          and memory_usage_fields[1] | float > 0
+        )
+        else 0
+      }}
+  when: hana_validate_os_baseline | bool
+  tags: [memory_usage]
+
+- name: "OS BASELINE: record memory usage result"
+  ansible.builtin.set_fact:
+    hana_check_results: >-
+      {{ hana_check_results + [{
+        'check': 'Memory usage',
+        'status': (
+          'ERROR'
+          if (
+            memory_usage_command.rc | default(99) | int != 0
+            or memory_usage_fields | length < 7
+          )
+          else (
+            'FAIL'
+            if memory_used_percent | float >=
+               memory_usage_fail_percent | float
+            else (
+              'WARN'
+              if memory_used_percent | float >=
+                 memory_usage_warn_percent | float
+              else 'PASS'
+            )
+          )
+        ),
+        'details': (
+          'free command failed or returned an unexpected format; rc=' ~
+          (memory_usage_command.rc | default('unknown') | string)
+          if (
+            memory_usage_command.rc | default(99) | int != 0
+            or memory_usage_fields | length < 7
+          )
+          else (
+            'used=' ~ (memory_used_mb | string) ~ ' MB' ~
+            '; available=' ~ (memory_available_mb | string) ~ ' MB' ~
+            '; total=' ~ (memory_total_mb | string) ~ ' MB' ~
+            '; used_percent=' ~ (memory_used_percent | string) ~ '%'
+          )
+        )
+      }] }}
+  when: hana_validate_os_baseline | bool
+  tags: [memory_usage]
+
+- name: "OS BASELINE: save memory usage raw output"
+  ansible.builtin.copy:
+    dest: "{{ host_raw_dir }}/memory_usage.txt"
+    mode: "0644"
+    content: |
+      rc={{ memory_usage_command.rc | default('unknown') }}
+      warn_threshold={{ memory_usage_warn_percent }}
+      fail_threshold={{ memory_usage_fail_percent }}
+
+      {{ memory_usage_command.stdout | default('') }}
+
+      stderr:
+      {{ memory_usage_command.stderr | default('') }}
+  delegate_to: localhost
+  become: false
+  when:
+    - hana_validate_os_baseline | bool
+    - save_raw_outputs | bool
+  tags: [memory_usage]
+
+- name: "OS BASELINE: build OS facts snapshot"
+  ansible.builtin.set_fact:
+    os_facts_snapshot:
+      inventory_hostname: "{{ inventory_hostname }}"
+      ansible_hostname: "{{ ansible_hostname | default('unknown') }}"
+      fqdn: "{{ ansible_fqdn | default('unknown') }}"
+      distribution: "{{ ansible_distribution | default('unknown') }}"
+      distribution_version: >-
+        {{ ansible_distribution_version | default('unknown') }}
+      distribution_release: >-
+        {{ ansible_distribution_release | default('unknown') }}
+      os_family: "{{ ansible_os_family | default('unknown') }}"
+      architecture: "{{ ansible_architecture | default('unknown') }}"
+      kernel: "{{ ansible_kernel | default('unknown') }}"
+      python_version: "{{ ansible_python_version | default('unknown') }}"
+      processor_vcpus: "{{ ansible_processor_vcpus | default('unknown') }}"
+      memory_mb: "{{ ansible_memtotal_mb | default('unknown') }}"
+      mounts: "{{ ansible_mounts | default([]) }}"
+  when: hana_validate_os_baseline | bool
+  tags: [os_facts_snapshot]
+
+- name: "OS BASELINE: save OS facts snapshot"
+  ansible.builtin.copy:
+    dest: "{{ host_raw_dir }}/os_facts.json"
+    mode: "0644"
+    content: "{{ os_facts_snapshot | to_nice_json }}\n"
+  delegate_to: localhost
+  become: false
+  when:
+    - hana_validate_os_baseline | bool
+    - save_raw_outputs | bool
+  tags: [os_facts_snapshot]
+
+- name: "OS BASELINE: record OS facts snapshot result"
+  ansible.builtin.set_fact:
+    hana_check_results: >-
+      {{ hana_check_results + [{
+        'check': 'OS facts snapshot',
+        'status': 'PASS',
+        'details': (
+          (ansible_distribution | default('unknown')) ~ ' ' ~
+          (ansible_distribution_version | default('unknown')) ~
+          '; kernel=' ~ (ansible_kernel | default('unknown')) ~
+          '; arch=' ~ (ansible_architecture | default('unknown'))
+        )
+      }] }}
+  when: hana_validate_os_baseline | bool
+  tags: [os_facts_snapshot]

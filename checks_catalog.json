@@ -1,0 +1,666 @@
+{
+  "_comment": "Catalog for bulk SAP validation. scope/component metadata is used for documentation and future routing; existing ansible_tag values and task implementations are unchanged.",
+  "checks": [
+    {
+      "id": "login",
+      "category": "Login",
+      "task": "Check that Ansible can log in to each VM",
+      "scope": "host",
+      "component": "operating_system",
+      "ansible_tag": "login",
+      "task_file": "tasks/connectivity.yml",
+      "implementation_status": "runs_today"
+    },
+    {
+      "id": "sudo_root",
+      "category": "Login",
+      "task": "Check that Ansible can become root",
+      "scope": "host",
+      "component": "operating_system",
+      "ansible_tag": "sudo_root",
+      "task_file": "tasks/connectivity.yml",
+      "implementation_status": "runs_today"
+    },
+    {
+      "id": "sudo_sidadm",
+      "category": "Login",
+      "task": "Validate sudo to every SAP SID administrator assigned to the host",
+      "scope": "host",
+      "component": "operating_system",
+      "ansible_tag": "sudo_sidadm",
+      "task_file": "tasks/connectivity.yml",
+      "implementation_status": "runs_today"
+    },
+    {
+      "id": "vault_entries",
+      "category": "Login",
+      "task": "Check required Vault entries exist",
+      "scope": "host",
+      "component": "operating_system",
+      "ansible_tag": null,
+      "task_file": "tasks/connectivity.yml (future)",
+      "implementation_status": "future",
+      "notes": "Requires the organization Vault integration and expected secret paths."
+    },
+    {
+      "id": "hana_version",
+      "category": "Configuration & Settings",
+      "task": "Report the HANA DB version",
+      "scope": "component",
+      "component": "hana",
+      "ansible_tag": "hana_version",
+      "task_file": "tasks/system_health.yml",
+      "implementation_status": "runs_today"
+    },
+    {
+      "id": "hana_cockpit_entries",
+      "category": "Configuration & Settings",
+      "task": "Validate HANA Cockpit entries",
+      "scope": "component",
+      "component": "hana",
+      "ansible_tag": null,
+      "task_file": "manual/RPA only (future)",
+      "implementation_status": "manual_only",
+      "notes": "GUI-only on the current setup."
+    },
+    {
+      "id": "services_green",
+      "category": "Configuration & Settings",
+      "task": "Validate HANA services are green",
+      "scope": "component",
+      "component": "hana",
+      "ansible_tag": "services_green",
+      "task_file": "tasks/system_health.yml",
+      "implementation_status": "runs_today"
+    },
+    {
+      "id": "incrond",
+      "category": "Configuration & Settings",
+      "task": "Check incrond service used by backup jobs",
+      "scope": "component",
+      "component": "hana",
+      "ansible_tag": "incrond",
+      "task_file": "tasks/backup.yml",
+      "implementation_status": "runs_today"
+    },
+    {
+      "id": "log_mode",
+      "category": "Configuration & Settings",
+      "task": "Check SYSTEMDB log_mode = normal via hdbsql as hdbadm",
+      "scope": "component",
+      "component": "hana",
+      "ansible_tag": "log_mode",
+      "task_file": "tasks/backup.yml",
+      "implementation_status": "runs_today"
+    },
+    {
+      "id": "hana_monitoring_id",
+      "category": "Configuration & Settings",
+      "task": "Check HANA monitoring ID shared with monitoring team",
+      "scope": "component",
+      "component": "hana",
+      "ansible_tag": null,
+      "task_file": "tasks/monitoring.yml (future)",
+      "implementation_status": "future",
+      "notes": "Expected monitoring ID/source-of-truth not yet provided."
+    },
+    {
+      "id": "tcp_backlog",
+      "category": "Configuration & Settings",
+      "task": "Check global.ini tcp_backlog = 2048",
+      "scope": "component",
+      "component": "hana",
+      "ansible_tag": "tcp_backlog",
+      "task_file": "tasks/configuration.yml",
+      "implementation_status": "runs_today"
+    },
+    {
+      "id": "hana_license",
+      "category": "Configuration & Settings",
+      "task": "Report HANA license data via SYS.M_LICENSES and warn on temporary/expired licenses",
+      "scope": "component",
+      "component": "hana",
+      "ansible_tag": "hana_license",
+      "task_file": "tasks/sap_app.yml",
+      "implementation_status": "runs_today"
+    },
+    {
+      "id": "sslminprotocolversion",
+      "category": "Configuration & Settings",
+      "task": "Verify sslminprotocolversion = tls12",
+      "scope": "component",
+      "component": "hana",
+      "ansible_tag": "sslminprotocolversion",
+      "task_file": "tasks/configuration.yml",
+      "implementation_status": "runs_today"
+    },
+    {
+      "id": "default_pfl_icm_ports",
+      "category": "Configuration & Settings",
+      "task": "Report DEFAULT.PFL icm/server_port_* values using slurp and regex",
+      "scope": "component",
+      "component": "abap",
+      "ansible_tag": "default_pfl_icm_ports",
+      "task_file": "tasks/sap_app.yml",
+      "implementation_status": "runs_today"
+    },
+    {
+      "id": "cvers_report",
+      "category": "Configuration & Settings",
+      "task": "Report CVERS add-on and component versions through the s4hadm DEFAULT user-store key",
+      "scope": "component",
+      "component": "abap",
+      "ansible_tag": "cvers_report",
+      "task_file": "tasks/sap_app.yml",
+      "implementation_status": "runs_today",
+      "notes": "The validation log confirms the s4hadm hdbuserstore key DEFAULT exists."
+    },
+    {
+      "id": "os_facts_snapshot",
+      "category": "Configuration & Settings",
+      "task": "Capture OS facts for build-sheet comparison",
+      "scope": "host",
+      "component": "operating_system",
+      "ansible_tag": "os_facts_snapshot",
+      "task_file": "tasks/os_baseline.yml",
+      "implementation_status": "runs_today"
+    },
+    {
+      "id": "timezone_utc",
+      "category": "Configuration & Settings",
+      "task": "Read the configured timezone with timedatectl and verify UTC",
+      "scope": "host",
+      "component": "operating_system",
+      "ansible_tag": "timezone_utc",
+      "task_file": "tasks/os_baseline.yml",
+      "implementation_status": "runs_today"
+    },
+    {
+      "id": "disk_usage",
+      "category": "Configuration & Settings",
+      "task": "Calculate utilization for configured HANA mounts and compare warning/failure thresholds",
+      "scope": "host",
+      "component": "operating_system",
+      "ansible_tag": "disk_usage",
+      "task_file": "tasks/os_baseline.yml",
+      "implementation_status": "runs_today"
+    },
+    {
+      "id": "memory_usage",
+      "category": "Configuration & Settings",
+      "task": "Calculate current memory utilization and compare warning/failure thresholds",
+      "scope": "host",
+      "component": "operating_system",
+      "ansible_tag": "memory_usage",
+      "task_file": "tasks/os_baseline.yml",
+      "implementation_status": "runs_today"
+    },
+    {
+      "id": "backup_validate",
+      "category": "Backup",
+      "task": "Check the SYSTEMDB backup catalog for a successful data backup",
+      "scope": "component",
+      "component": "hana",
+      "ansible_tag": "last_successful_backup",
+      "task_file": "tasks/backup.yml",
+      "implementation_status": "runs_today",
+      "notes": "Tenant backup validation requires a separately confirmed tenant SQL connection."
+    },
+    {
+      "id": "last_successful_backup",
+      "category": "Backup",
+      "task": "Report the last successful SYSTEMDB data-backup timestamp",
+      "scope": "component",
+      "component": "hana",
+      "ansible_tag": "last_successful_backup",
+      "task_file": "tasks/backup.yml",
+      "implementation_status": "runs_today",
+      "notes": "The current HDB_KEY_CAL connects to SYSTEMDB."
+    },
+    {
+      "id": "log_backup_interval_mode",
+      "category": "Backup",
+      "task": "Check SYSTEMDB log_backup_interval_mode = Service via hdbsql as hdbadm",
+      "scope": "component",
+      "component": "hana",
+      "ansible_tag": "log_backup_interval_mode",
+      "task_file": "tasks/backup.yml",
+      "implementation_status": "runs_today"
+    },
+    {
+      "id": "backint",
+      "category": "Backup",
+      "task": "Inspect the HANA Backint integration directory and files",
+      "scope": "component",
+      "component": "hana",
+      "ansible_tag": "backint",
+      "task_file": "tasks/backup.yml",
+      "implementation_status": "runs_today",
+      "notes": "Current path: /usr/sap/HDB/SYS/global/hdb/opt."
+    },
+    {
+      "id": "backup_jobs_cockpit",
+      "category": "Backup",
+      "task": "Validate backup jobs in HANA Cockpit",
+      "scope": "component",
+      "component": "hana",
+      "ansible_tag": null,
+      "task_file": "manual/RPA only (future)",
+      "implementation_status": "manual_only",
+      "notes": "GUI-only; SQL/catalog checks run separately."
+    },
+    {
+      "id": "ami_backup",
+      "category": "Backup",
+      "task": "Validate an enabled AWS DLM AMI backup schedule",
+      "scope": "component",
+      "component": "hana",
+      "ansible_tag": null,
+      "task_file": "tasks/cloud.yml (disabled until configured)",
+      "implementation_status": "configured_but_disabled",
+      "notes": "No confirmed aws_dlm_policy_id is available; cloud.yml is not imported by site.yml."
+    },
+    {
+      "id": "clamav",
+      "category": "Security",
+      "task": "Check that a ClamAV service is installed and running",
+      "scope": "host",
+      "component": "operating_system",
+      "ansible_tag": "clamav",
+      "task_file": "tasks/security.yml",
+      "implementation_status": "runs_today"
+    },
+    {
+      "id": "clamsap",
+      "category": "Security",
+      "task": "Check that a ClamSAP package is installed",
+      "scope": "host",
+      "component": "operating_system",
+      "ansible_tag": "clamsap",
+      "task_file": "tasks/security.yml",
+      "implementation_status": "runs_today"
+    },
+    {
+      "id": "watchman",
+      "category": "Security",
+      "task": "Check that Watchman is installed",
+      "scope": "host",
+      "component": "operating_system",
+      "ansible_tag": "watchman",
+      "task_file": "tasks/security.yml",
+      "implementation_status": "runs_today"
+    },
+    {
+      "id": "cert_expiry",
+      "category": "Security",
+      "task": "Inspect configured X.509 certificates and fail when an expected file is missing",
+      "scope": "component",
+      "component": "abap",
+      "ansible_tag": "cert_expiry",
+      "task_file": "tasks/security.yml",
+      "implementation_status": "runs_today"
+    },
+    {
+      "id": "diagnostic_agent",
+      "category": "Monitoring",
+      "task": "Check SAP Diagnostics Agent/smdagent without treating SAP Host Agent as equivalent",
+      "scope": "host",
+      "component": "monitoring",
+      "ansible_tag": "diagnostic_agent",
+      "task_file": "tasks/monitoring.yml",
+      "implementation_status": "runs_today"
+    },
+    {
+      "id": "hsr_configured",
+      "category": "Replication",
+      "task": "Check HSR is configured and mode matches RPO",
+      "scope": "component",
+      "component": "hana",
+      "ansible_tag": null,
+      "task_file": "tasks/replication_dr.yml (future)",
+      "implementation_status": "future",
+      "notes": "Requires a second HANA host."
+    },
+    {
+      "id": "inifile_checker_replicate",
+      "category": "Replication",
+      "task": "Check global.ini inifile_Checker replicate = true",
+      "scope": "component",
+      "component": "hana",
+      "ansible_tag": null,
+      "task_file": "tasks/replication_dr.yml (future)",
+      "implementation_status": "future"
+    },
+    {
+      "id": "logshipping_retention",
+      "category": "Replication",
+      "task": "Check logshipping_max_retention_size",
+      "scope": "component",
+      "component": "hana",
+      "ansible_tag": null,
+      "task_file": "tasks/replication_dr.yml (future)",
+      "implementation_status": "future"
+    },
+    {
+      "id": "enable_ssl_replication",
+      "category": "Replication",
+      "task": "Check replication communication SSL is enabled",
+      "scope": "component",
+      "component": "hana",
+      "ansible_tag": null,
+      "task_file": "tasks/replication_dr.yml (future)",
+      "implementation_status": "future"
+    },
+    {
+      "id": "dr_version_match",
+      "category": "Replication",
+      "task": "Compare primary and DR HANA versions",
+      "scope": "component",
+      "component": "hana",
+      "ansible_tag": null,
+      "task_file": "tasks/replication_dr.yml (future)",
+      "implementation_status": "future"
+    },
+    {
+      "id": "hsr_status_studio",
+      "category": "DB DR Validation",
+      "task": "Check HSR status in HANA Studio",
+      "scope": "component",
+      "component": "hana",
+      "ansible_tag": null,
+      "task_file": "tasks/replication_dr.yml (future)",
+      "implementation_status": "future"
+    },
+    {
+      "id": "sld_registration",
+      "category": "DB DR Validation",
+      "task": "Validate HANA SLD registration for HSR",
+      "scope": "component",
+      "component": "hana",
+      "ansible_tag": null,
+      "task_file": "tasks/replication_dr.yml (future)",
+      "implementation_status": "future"
+    },
+    {
+      "id": "plugins_match",
+      "category": "DB DR Validation",
+      "task": "Compare HANA plug-ins between primary and DR",
+      "scope": "component",
+      "component": "hana",
+      "ansible_tag": null,
+      "task_file": "tasks/replication_dr.yml (future)",
+      "implementation_status": "future"
+    },
+    {
+      "id": "shared_filesystems",
+      "category": "DB DR Validation",
+      "task": "Compare shared filesystems on primary and DR",
+      "scope": "component",
+      "component": "hana",
+      "ansible_tag": null,
+      "task_file": "tasks/replication_dr.yml (future)",
+      "implementation_status": "future"
+    },
+    {
+      "id": "etc_hosts_ns2",
+      "category": "DB DR Validation",
+      "task": "Validate DR hosts and NS2 naming in /etc/hosts",
+      "scope": "component",
+      "component": "hana",
+      "ansible_tag": null,
+      "task_file": "tasks/replication_dr.yml (future)",
+      "implementation_status": "future"
+    },
+    {
+      "id": "uid_gid_match",
+      "category": "DB DR Validation",
+      "task": "Compare SAP user/group IDs between primary and DR",
+      "scope": "component",
+      "component": "hana",
+      "ansible_tag": null,
+      "task_file": "tasks/replication_dr.yml (future)",
+      "implementation_status": "future"
+    },
+    {
+      "id": "crontab_root_jobs",
+      "category": "DB DR Validation",
+      "task": "Compare root AIDE/ClamAV cron entries",
+      "scope": "component",
+      "component": "hana",
+      "ansible_tag": null,
+      "task_file": "tasks/replication_dr.yml (future)",
+      "implementation_status": "future"
+    },
+    {
+      "id": "disk_striping_match",
+      "category": "DB DR Validation",
+      "task": "Compare primary and DR disk striping",
+      "scope": "component",
+      "component": "hana",
+      "ansible_tag": null,
+      "task_file": "tasks/replication_dr.yml (future)",
+      "implementation_status": "future"
+    },
+    {
+      "id": "os_version_match",
+      "category": "DB DR Validation",
+      "task": "Compare primary and DR OS versions",
+      "scope": "component",
+      "component": "hana",
+      "ansible_tag": null,
+      "task_file": "tasks/replication_dr.yml (future)",
+      "implementation_status": "future"
+    },
+    {
+      "id": "corosync",
+      "category": "HA / Cluster",
+      "task": "Validate corosync configuration and service",
+      "scope": "landscape",
+      "component": "landscape",
+      "ansible_tag": null,
+      "task_file": "tasks/ha_cluster.yml (future)",
+      "implementation_status": "future"
+    },
+    {
+      "id": "pacemaker",
+      "category": "HA / Cluster",
+      "task": "Validate pacemaker resources and status",
+      "scope": "landscape",
+      "component": "landscape",
+      "ansible_tag": null,
+      "task_file": "tasks/ha_cluster.yml (future)",
+      "implementation_status": "future"
+    },
+    {
+      "id": "ascs_ers_failover",
+      "category": "HA / Cluster",
+      "task": "Validate ASCS/ERS failover",
+      "scope": "landscape",
+      "component": "landscape",
+      "ansible_tag": null,
+      "task_file": "tasks/ha_cluster.yml (future)",
+      "implementation_status": "future"
+    },
+    {
+      "id": "web_dispatcher",
+      "category": "Other Systems",
+      "task": "Validate SAP Web Dispatcher",
+      "scope": "component",
+      "component": "webdispatcher",
+      "ansible_tag": null,
+      "task_file": "separate system playbook (future)",
+      "implementation_status": "excluded_current_host"
+    },
+    {
+      "id": "ads",
+      "category": "Other Systems",
+      "task": "Validate Adobe Document Services",
+      "scope": "component",
+      "component": "ads",
+      "ansible_tag": null,
+      "task_file": "separate system playbook (future)",
+      "implementation_status": "excluded_current_host"
+    },
+    {
+      "id": "cloud_connector",
+      "category": "Other Systems",
+      "task": "Validate SAP Cloud Connector",
+      "scope": "component",
+      "component": "cloud_connector",
+      "ansible_tag": null,
+      "task_file": "separate system playbook (future)",
+      "implementation_status": "excluded_current_host"
+    },
+    {
+      "id": "cpi_ds",
+      "category": "Other Systems",
+      "task": "Validate CPI-DS",
+      "scope": "component",
+      "component": "cpi_ds",
+      "ansible_tag": null,
+      "task_file": "separate system playbook (future)",
+      "implementation_status": "excluded_current_host"
+    },
+    {
+      "id": "sapcc_tomcat",
+      "category": "Other Systems",
+      "task": "Validate SAPCC/Tomcat items",
+      "scope": "component",
+      "component": "sapcc_tomcat",
+      "ansible_tag": null,
+      "task_file": "separate system playbook (future)",
+      "implementation_status": "excluded_current_host"
+    },
+    {
+      "id": "sap_gui_logon",
+      "category": "Manual / RPA",
+      "task": "SAP GUI logon test",
+      "scope": "component",
+      "component": "abap",
+      "ansible_tag": null,
+      "task_file": "manual/RPA only",
+      "implementation_status": "manual_only"
+    },
+    {
+      "id": "hana_cockpit_ui",
+      "category": "Manual / RPA",
+      "task": "HANA Cockpit UI validation",
+      "scope": "component",
+      "component": "hana",
+      "ansible_tag": null,
+      "task_file": "manual/RPA only",
+      "implementation_status": "manual_only"
+    },
+    {
+      "id": "securecrt_sessions",
+      "category": "Manual / RPA",
+      "task": "SecureCRT session validation",
+      "scope": "host",
+      "component": "operating_system",
+      "ansible_tag": null,
+      "task_file": "manual/RPA only",
+      "implementation_status": "manual_only"
+    },
+    {
+      "id": "sharepoint_upload",
+      "category": "Manual / RPA",
+      "task": "Upload validation artifacts to SharePoint",
+      "scope": "landscape",
+      "component": "landscape",
+      "ansible_tag": null,
+      "task_file": "manual/RPA only",
+      "implementation_status": "manual_only"
+    },
+    {
+      "id": "handover_document",
+      "category": "Manual / RPA",
+      "task": "Complete handover document",
+      "scope": "landscape",
+      "component": "landscape",
+      "ansible_tag": null,
+      "task_file": "manual/RPA only",
+      "implementation_status": "manual_only"
+    }
+  ],
+  "profiles": {
+    "core-connectivity": {
+      "tags": [
+        "login",
+        "sudo_root",
+        "sudo_sidadm",
+        "hana_version",
+        "services_green"
+      ],
+      "extra_vars": {}
+    },
+    "lab-quick": {
+      "tags": [
+        "login",
+        "sudo_root",
+        "sudo_sidadm",
+        "services_green",
+        "os_facts_snapshot"
+      ],
+      "extra_vars": {}
+    },
+    "strict-full": {
+      "tags": [
+        "login",
+        "sudo_root",
+        "sudo_sidadm",
+        "hana_version",
+        "services_green",
+        "incrond",
+        "tcp_backlog",
+        "sslminprotocolversion",
+        "backint",
+        "log_mode",
+        "log_backup_interval_mode",
+        "last_successful_backup"
+      ],
+      "extra_vars": {
+        "hana_strict_validation": true,
+        "hana_validate_incrond": true,
+        "hana_validate_backint": true
+      }
+    },
+    "production-readiness": {
+      "tags": [
+        "login",
+        "sudo_root",
+        "sudo_sidadm",
+        "hana_version",
+        "services_green",
+        "tcp_backlog",
+        "sslminprotocolversion",
+        "incrond",
+        "backint",
+        "log_mode",
+        "log_backup_interval_mode",
+        "last_successful_backup",
+        "clamav",
+        "clamsap",
+        "watchman",
+        "cert_expiry",
+        "timezone_utc",
+        "disk_usage",
+        "memory_usage",
+        "os_facts_snapshot",
+        "default_pfl_icm_ports",
+        "cvers_report",
+        "hana_license",
+        "diagnostic_agent"
+      ],
+      "extra_vars": {
+        "hana_validate_incrond": true,
+        "hana_validate_backint": true,
+        "hana_validate_security": true,
+        "hana_validate_os_baseline": true,
+        "hana_validate_sap_app": true,
+        "hana_validate_monitoring": true,
+        "hana_validate_cloud": false
+      },
+      "notes": "Runs automated HANA, S4H/ABAP, host, security, and monitoring checks only on servers whose generated component groups make them applicable."
+    }
+  }
+}

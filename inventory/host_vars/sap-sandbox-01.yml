@@ -1,0 +1,78 @@
+---
+server_id: sap-sandbox-01
+physical_ip: 10.0.22.162
+physical_hostname: sid-hdb-s4h.dummy.nodomain
+sap_environment: sandbox
+sap_landscape_id: s4h-sandbox
+
+ansible_port: 22
+ansible_user: root
+ansible_ssh_private_key_file: /Users/sophiavo/.ssh/s4h_key
+ansible_python_interpreter: /usr/bin/python3.11
+
+sap_instances:
+  - component: hana
+    sid: HDB
+    instance_name: HDB02
+    instance_number: "02"
+    virtual_hostname: vhcalhdbdb
+    admin_user: hdbadm
+    role: primary
+    tenant: S4H
+    userstore_key: HDB_KEY_CAL
+  - component: abap
+    sid: S4H
+    instance_name: D00
+    instance_number: "00"
+    virtual_hostname: vhcals4hci
+    admin_user: s4hadm
+    role: dialog
+    userstore_key: DEFAULT
+  - component: ascs
+    sid: S4H
+    instance_name: ASCS01
+    instance_number: "01"
+    virtual_hostname: vhcals4hcs
+    admin_user: s4hadm
+    role: central
+  - component: webdispatcher
+    sid: S4H
+    instance_number: "01"
+    virtual_hostname: vhcals4hcs
+    admin_user: s4hadm
+
+# Compatibility variables consumed by the current validated task files.
+hana_sid: HDB
+hana_instance_number: "02"
+hana_admin_user: hdbadm
+hana_admin_home: /usr/sap/HDB/home
+hdbsql_userkey: HDB_KEY_CAL
+hana_hdbsql_bin: /usr/sap/HDB/HDB02/exe/hdbsql
+global_ini_remote_path: /usr/sap/HDB/SYS/global/hdb/custom/config/global.ini
+backint_integration_path: /usr/sap/HDB/SYS/global/hdb/opt
+hana_mounts_to_validate:
+  - /
+  - /hana/data/HDB
+  - /hana/log/HDB
+  - /hana/shared/HDB
+
+app_sid: S4H
+app_instance_number: "00"
+app_ascs_instance_number: "01"
+app_admin_user: s4hadm
+app_admin_home: /home/s4hadm
+app_profile_dir: /sapmnt/S4H/profile
+app_default_pfl_remote_path: /sapmnt/S4H/profile/DEFAULT.PFL
+app_hdbsql_userkey: DEFAULT
+app_db_schema: ""
+app_hdbsql_bin: /usr/sap/HDB/HDB02/exe/hdbsql
+
+tls_cert_paths:
+  - /usr/sap/S4H/D00/sec/SAPSSLS.pse
+tls_cert_become_user: s4hadm
+
+sap_hostname_aliases:
+  sid-hdb-s4h.dummy.nodomain: 10.0.22.162
+  vhcals4hci: 10.0.22.162
+  vhcals4hcs: 10.0.22.162
+  vhcalhdbdb: 10.0.22.162

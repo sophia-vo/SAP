@@ -1,0 +1,3 @@
+---
+# Modern component-group defaults. The legacy hana_db group remains generated
+# as a compatibility alias for the existing validation task conditions.
