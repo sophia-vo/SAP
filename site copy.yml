@@ -23,31 +23,6 @@
     host_metadata_path: "{{ host_dir }}/metadata.json"
     host_status_path: "{{ host_dir }}/status.json"
     host_raw_dir: "{{ host_dir }}/raw"
-    validation_check_descriptions:
-      "SSH / Ansible login": "Confirms Ansible can connect to the server and execute a ping successfully."
-      "Become root": "Confirms Ansible can elevate privileges to the root account."
-      "HANA version command": "Retrieves the installed SAP HANA version and verifies the command can run."
-      "HANA services": "Checks that all SAP HANA services reported by sapcontrol are in a GREEN state."
-      "global.ini readable": "Confirms the HANA global.ini file exists at the expected path and can be read."
-      "tcp_backlog baseline": "Checks that every configured tcp_backlog value in global.ini equals 2048."
-      "sslminprotocolversion baseline": "Checks that every sslminprotocolversion value is set to TLS12."
-      "incrond.service": "Checks whether the incrond service used by backup workflows is active."
-      "HANA Backint integration": "Inspects the HANA Backint integration directory and counts configured entries."
-      "SYSTEMDB log_mode": "Queries SYSTEMDB to verify that log_mode is set to normal."
-      "SYSTEMDB log_backup_interval_mode": "Queries SYSTEMDB to verify that log_backup_interval_mode is set to Service."
-      "Last successful SYSTEMDB data backup": "Queries the backup catalog for the most recent successful SYSTEMDB data backup."
-      "ClamAV service running": "Detects a candidate ClamAV service and checks whether it is running."
-      "ClamSAP installed": "Checks whether a ClamSAP package is installed on the server."
-      "Watchman installed": "Checks whether the Watchman binary or package is installed."
-      "Certificate expiry": "Inspects configured SAP X.509 certificates and verifies validity beyond the required threshold."
-      "Timezone is UTC": "Reads the configured system timezone and verifies that it is UTC or Etc/UTC."
-      "Disk usage": "Measures configured filesystem utilization and compares it with warning and failure thresholds."
-      "Memory usage": "Calculates current memory utilization and compares it with warning and failure thresholds."
-      "OS facts snapshot": "Captures the OS version, kernel, and architecture for inventory and baseline comparison."
-      "DEFAULT.PFL ICM ports": "Extracts the icm/server_port_* settings from the SAP DEFAULT.PFL profile."
-      "CVERS add-on/version report": "Reports installed SAP software components, add-ons, releases, and support-package levels from CVERS."
-      "HANA license SQL report": "Queries SYS.M_LICENSES and reports the SAP HANA license status and details."
-      "SAP Diagnostics Agent": "Checks for an SAP Diagnostics Agent service or smdagent process."
 
   pre_tasks:
     - name: "SETUP: compute a run timestamp shared by every host"  # noqa: run-once[task]
@@ -136,79 +111,30 @@
         dest: "{{ host_report_path }}"
         mode: "0644"
         content: |
-          {% set pass_count = hana_check_results | selectattr('status', 'equalto', 'PASS') | list | length %}
-          {% set fail_count = hana_check_results | selectattr('status', 'equalto', 'FAIL') | list | length %}
-          {% set error_count = hana_check_results | selectattr('status', 'equalto', 'ERROR') | list | length %}
-          {% set warn_count = hana_check_results | selectattr('status', 'equalto', 'WARN') | list | length %}
-          {% set skipped_count = hana_check_results | selectattr('status', 'equalto', 'SKIPPED') | list | length %}
-          {% if fail_count > 0 or error_count > 0 %}
-          {% set overall_status = 'FAIL' %}
-          {% elif warn_count > 0 or skipped_count > 0 %}
-          {% set overall_status = 'WARN' %}
-          {% else %}
-          {% set overall_status = 'PASS' %}
-          {% endif %}
           # SAP Validation Report — {{ inventory_hostname }}
 
-          ## Run overview
+          **Generated:** {{ ansible_date_time.iso8601 }}<br>
+          **Inventory groups:** {{ group_names | join(', ') }}<br>
+          **HANA SID:** {{ hana_sid | default('n/a') }}<br>
+          **HANA instance:** {{ hana_instance_number | default('n/a') }}<br>
+          **HANA admin:** {{ hana_admin_user | default('n/a') }}<br>
+          **Application SID:** {{ app_sid | default('n/a') }}<br>
+          **Application instance:** {{ app_instance_number | default('n/a') }}<br>
+          **Application admin:** {{ app_admin_user | default('n/a') }}<br>
+          **Strict validation:** {{ hana_strict_validation | bool }}<br>
+          **Checks run this pass:** {{ ansible_run_tags | default(['all']) | join(', ') }}<br>
 
-          | Field | Value |
-          |---|---|
-          | Overall status | **{{ overall_status }}** |
-          | Generated | `{{ ansible_date_time.iso8601 }}` |
-          | Strict validation | `{{ hana_strict_validation | bool }}` |
-          | Results | {{ pass_count }} PASS, {{ warn_count }} WARN, {{ fail_count }} FAIL, {{ error_count }} ERROR, {{ skipped_count }} SKIPPED |
-          | Checks run this pass | {{ ansible_run_tags | default(['all']) | join(', ') | replace('|', '\\|') }} |
-          | Inventory groups | {{ group_names | join(', ') | replace('|', '\\|') }} |
+          ## Summary
 
-          ## SAP system context
-
-          | Component | SID | Instance | Administrator |
-          |---|---|---|---|
-          | SAP HANA | `{{ hana_sid | default('n/a') }}` | `{{ hana_instance_number | default('n/a') }}` | `{{ hana_admin_user | default('n/a') }}` |
-          | SAP application | `{{ app_sid | default('n/a') }}` | `{{ app_instance_number | default('n/a') }}` | `{{ app_admin_user | default('n/a') }}` |
-
-          ## Results index
-
-          | # | Check | What it checks | Status |
-          |---:|---|---|:---:|
-          {% for r in hana_check_results %}
-          {% if r.check in validation_check_descriptions %}
-          {% set check_description = validation_check_descriptions[r.check] %}
-          {% elif r.check is match('^Become ') %}
-          {% set check_description = 'Confirms Ansible can switch to the specified SAP or database administrator account.' %}
-          {% else %}
-          {% set check_description = 'Runs the named validation and records its result for this server.' %}
-          {% endif %}
-          | {{ loop.index }} | {{ r.check | string | replace('|', '\\|') }} | {{ check_description | replace('|', '\\|') }} | **{{ r.status }}** |
-          {% endfor %}
-
-          ## Detailed results
-
-          {% for r in hana_check_results %}
-          {% if r.check in validation_check_descriptions %}
-          {% set check_description = validation_check_descriptions[r.check] %}
-          {% elif r.check is match('^Become ') %}
-          {% set check_description = 'Confirms Ansible can switch to the specified SAP or database administrator account.' %}
-          {% else %}
-          {% set check_description = 'Runs the named validation and records its result for this server.' %}
-          {% endif %}
-          ### {{ loop.index }}. {{ r.check }}
-
-          - **Status:** {{ r.status }}
-          - **What it checks:** {{ check_description }}
-
-          **Returned details**
-
-          ````text
-          {{ r.details | string }}
-          ````
-
+          | Check | Status | Details |
+          |---|---:|---|
+          {% for r in hana_check_results %}| {{ r.check }} | {{ r.status }} | {{ r.details | string | replace('|', '\\|') | replace('\n', '<br>') }} |
           {% endfor %}
           {% if save_raw_outputs %}
+
           ## Raw outputs
 
-          Full raw command output is saved in the [`raw/`](raw/) directory for this server.
+          Saved to `raw/` in this server folder.
           {% endif %}
       delegate_to: localhost
       become: false

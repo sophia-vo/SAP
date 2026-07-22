@@ -1,0 +1,529 @@
+S4H POST-INSTALLATION VALIDATION - REPRODUCIBLE CLEAN LOG
+====================================================
+Source file       : S4H_validation_20260717_175623.log
+Validation started: 2026-07-17T17:56:23+00:00
+Validation ended  : 2026-07-17T18:13:55+00:00
+Host              : sid-hdb-s4h.dummy.nodomain
+Cleanup applied   : ANSI/control characters, shell prompts, failed attempts, placeholder tests, and duplicates removed. Successful/corrected commands are retained before each result section.
+
+REPLICATION NOTES
+----------------------------------------------------
+Run commands under the account stated in each section.
+- root sections use Bash.
+- s4hadm and hdbadm sections use C shell.
+- Commands shown are the successful or corrected commands, not failed paste attempts.
+- Read-only commands are used except R3trans -d, which writes/updates trans.log.
+
+LOG CAPTURE COMMANDS (RUN AS root / Bash)
+----------------------------------------------------
+# Start a new validation log
+TS=$(date +%Y%m%d_%H%M%S)
+LOG=/root/S4H_validation_${TS}.log
+exec > >(tee -a "$LOG") 2>&1
+echo "Validation started: $(date -Is)"
+echo "Host: $(hostname -f 2>/dev/null || hostname)"
+echo "Output log: $LOG"
+
+INITIAL SAP SYSTEM DISCOVERY
+----------------------------------------------------
+RUN AS: root (Bash), then s4hadm and hdbadm (C shell)
+
+COMMANDS USED AS root:
+ls /usr/sap
+ls /usr/sap/HDB
+ls /usr/sap/S4H
+cat /etc/passwd
+
+CAPTURED RESULT:
+/usr/sap:
+ccms  HDB  hostctrl  S4H  sapservices  sapservices_202607_15_16.17.31  tmp  trans
+
+/usr/sap/HDB:
+HDB02  hdblcm_uploads  home  SYS
+
+/usr/sap/S4H:
+ASCS01  D00  OAT  OATscriptslib.tar  sapcc-2.17.2-linux-x64.zip  sapjvm-8.1.097-linux-x64.rpm  SYS
+
+/etc/passwd:
+root:x:0:0:root:/root:/bin/bash
+messagebus:x:499:498:User for D-Bus:/run/dbus:/usr/bin/false
+wwwrun:x:498:496:WWW daemon apache:/var/lib/wwwrun:/usr/sbin/nologin
+uuidd:x:497:495:User for uuidd:/var/run/uuidd:/usr/sbin/nologin
+nobody:x:65534:65534:nobody:/var/lib/nobody:/bin/bash
+man:x:13:62:Manual pages viewer:/var/lib/empty:/usr/sbin/nologin
+mail:x:496:494:Mailer daemon:/var/spool/clientmqueue:/usr/sbin/nologin
+lp:x:495:493:Printing daemon:/var/spool/lpd:/usr/sbin/nologin
+at:x:25:25:Batch jobs daemon:/var/spool/atjobs:/usr/sbin/nologin
+systemd-timesync:x:478:478:systemd Time Synchronization:/:/usr/sbin/nologin
+nscd:x:477:477:User for nscd:/run/nscd:/usr/sbin/nologin
+polkitd:x:476:476:User for polkitd:/var/lib/polkitd:/usr/sbin/nologin
+chrony:x:475:475:Chrony Daemon:/var/lib/chrony:/usr/sbin/nologin
+rpc:x:474:65534:user for rpcbind:/var/lib/empty:/sbin/nologin
+dockremap:x:473:473:docker --userns-remap=default:/:/usr/sbin/nologin
+vnc:x:472:472:user for VNC:/var/lib/empty:/usr/sbin/nologin
+sshd:x:471:471:SSH daemon:/var/lib/sshd:/usr/sbin/nologin
+statd:x:470:65533:NFS statd daemon:/var/lib/nfs:/sbin/nologin
+hdbadm:x:1004:1000:SAP HANA Database System Administrator:/usr/sap/HDB/home:/bin/csh
+s4hadm:x:1003:1000:SAP System Administrator:/home/s4hadm:/bin/csh
+sapadm:x:1005:1000:SAP Administrator:/home/sapadm:/bin/false
+sccadmin:x:1010:1010::/opt/sap/scc:/bin/false
+
+COMMANDS USED AS s4hadm:
+su - s4hadm
+hostname
+ls -l /sapmnt/*/profile/
+echo $SAPSYSTEMNAME
+exit
+
+CAPTURED RESULT:
+hostname:
+sid-hdb-s4h
+
+/sapmnt/*/profile/:
+total 84
+-rw-r--r-- 1 s4hadm sapsys 10390 Jul 15 16:31 DEFAULT.PFL
+-rw-r--r-- 1 s4hadm sapsys 10390 Jul 15 16:23 DEFAULT.PFL.bak2
+-rw-r--r-- 1 s4hadm sapsys   497 Oct 29  2018 INSTSTAT
+-rw-r--r-- 1 s4hadm sapsys  8441 Jul 15 16:23 S4H_ASCS01_vhcals4hcs
+-rw-r--r-- 1 s4hadm sapsys 15653 Jul 15 16:23 S4H_D00_vhcals4hci
+-rw-r--r-- 1 s4hadm sapsys  5367 Sep 16  2024 dev_dpmon
+-rw-r--r-- 1 s4hadm sapsys   160 Oct 29  2018 dev_sapstart
+-rw-r--r-- 1 s4hadm sapsys  2008 Mar 13  2020 redirect.txt
+-rw-r--r-- 1 s4hadm sapsys   651 Oct 29  2018 sapstart.log
+-rw-r--r-- 1 s4hadm sapsys  5409 Nov  7  2018 trans.log
+
+SAPSYSTEMNAME:
+S4H
+
+COMMANDS USED AS hdbadm:
+su - hdbadm
+HDB info
+ls -l /usr/sap/HDB/
+echo $SAPSYSTEMNAME
+hdbuserstore LIST
+
+CAPTURED RESULT:
+HDB info:
+USER          PID     PPID  %CPU        VSZ        RSS COMMAND
+hdbadm       4990     4989   0.7       6048       4096 -csh
+hdbadm       5033     4990   0.0       5056       3584  \_ /bin/sh /usr/sap/HDB/HDB02/HDB info
+hdbadm       5066     5033   0.0       8360       3328      \_ ps fx -U hdbadm -o user:8,pid:8,ppid:8,pcpu:5,vsz:10,rss:10,args
+hdbadm      26823        1   0.0    6484116      44836 hdbrsutil  --start --port 30203 --volume 3 --volumesuffix mnt00001/hdb00003 --identifier 1784132395
+hdbadm      25878        1   0.0     716860      40140 hdbrsutil  --start --port 30201 --volume 1 --volumesuffix mnt00001/hdb00001 --identifier 1784132276
+hdbadm      25673        1   0.0       9588       3160 sapstart pf=/usr/sap/HDB/SYS/profile/HDB_HDB02_vhcalhdbdb
+hdbadm      25681    25673   0.0     475808     102648  \_ /usr/sap/HDB/HDB02/vhcalhdbdb/trace/hdb.sapHDB_HDB02 -d -nw -f /usr/sap/HDB/HDB02/vhcalhdbdb/daemon.ini pf=/usr/sap/HDB/SYS/profile/HDB_H
+hdbadm      25707    25681   1.2   11327492    7383692      \_ hdbnameserver
+hdbadm      26025    25681   0.3    4662680     441000      \_ hdbcompileserver
+hdbadm      26028    25681   0.3    4951436     424084      \_ hdbpreprocessor
+hdbadm      26069    25681   0.7    9227232    3024808      \_ hdbdocstore -port 30260
+hdbadm      26072    25681   0.7    7690228    1576932      \_ hdbdpserver -port 30211
+hdbadm      26075    25681  12.2  116042212  111894012      \_ hdbindexserver -port 30203
+hdbadm      26078    25681   0.9    5816216    1581748      \_ hdbscriptserver -port 30204
+hdbadm      26081    25681   0.7    7846756    1720736      \_ hdbxsengine -port 30207
+hdbadm      27178    25681   0.3    5653784     469972      \_ hdbdiserver -port 30225
+hdbadm      27181    25681   0.3    5930540     602648      \_ hdbwebdispatcher
+hdbadm      25551        1   0.0     501536      58360 /usr/sap/HDB/HDB02/exe/sapstartsrv pf=/usr/sap/HDB/SYS/profile/HDB_HDB02_vhcalhdbdb
+
+/usr/sap/HDB/:
+total 4
+lrwxrwxrwx 1 hdbadm sapsys   22 Jul 15 16:14 HDB02 -> /hana/shared/HDB/HDB02
+drwxr-x--- 3 hdbadm sapsys   46 Jul 15 16:14 SYS
+drwxr-x--- 3 hdbadm sapsys   33 Jul 15 16:20 hdblcm_uploads
+drwxr-xr-x 9 hdbadm sapsys 4096 Jul 17 17:21 home
+
+SAPSYSTEMNAME:
+HDB
+
+hdbuserstore LIST:
+DATA FILE       : /usr/sap/HDB/home/.hdb/sid-hdb-s4h/SSFS_HDB.DAT
+KEY FILE        : /usr/sap/HDB/home/.hdb/sid-hdb-s4h/SSFS_HDB.KEY
+KEY HDB_KEY_CAL
+  ENV : vhcalhdbdb:30213
+  USER: CAL_USER
+
+ACTIVE RECORDS  : 4
+DELETED RECORDS : 0
+NUMBER OF COMPLETE KEY: 1
+
+Operation succeed.
+
+STATUS SUMMARY
+----------------------------------------------------
+[PASS] OS detected as SUSE Linux Enterprise Server 15 SP7; kernel Linux 6.4.0-150700.53.19-default; architecture x86-64.
+[PASS] Time zone is Etc/UTC (UTC, +0000); clock synchronized=yes; NTP service=active.
+[WARN] HANA data filesystem is 90% used (44G free). Review capacity before production use.
+[PASS] HANA data, log, shared, /usr/sap/S4H, and /sapmnt/S4H mounts are present.
+[PASS] LVM logical volumes are striped across 12 physical volumes.
+[PASS] SAP virtual hostnames resolve to 10.0.22.162 and respond to ping.
+[PASS] SAP Host Agent and all three SAP instances were discovered.
+[WARN] ClamAV, Watchman, and incrond packages/binaries/services were not found.
+[FAIL] Expected TLS certificate /usr/sap/S4H/D00/sec/SAPSSLS/F.crt is missing or unreadable.
+[NOT TESTED] External HTTPS endpoint was not tested because placeholder hostname and port values were used.
+[PASS] S4H D00 and ASCS01 required processes reported GREEN.
+[WARN] S4H licenses are temporary and expire on 2026-10-13.
+[PASS] R3trans database connectivity test completed with return code 0 and End of Transport (0000).
+[PASS] HANA required processes reported GREEN.
+[WARN] HANA license is temporary and expires on 2026-10-13.
+[WARN] Backint directory exists but is empty; no Backint-related files were found.
+[WARN] The SYSTEMDB backup catalog query returned no rows; tenant backup status was not validated.
+[NOT CONFIRMED] HANA persistence/backup INI values were not captured in a usable form.
+[PASS] HANA profile Autostart is set to 0.
+[INFO] HANA system replication is online but mode is none (not configured).
+[INFO] Pacemaker/Corosync cluster packages and services were not installed.
+[INFO] Diagnostics Agent directories, processes, services, and logs were not found.
+[NOT CONFIRMED] Application ICM/profile and application Autostart parameter checks were not successfully captured.
+
+SYSTEM INFORMATION
+----------------------------------------------------
+RUN AS: root (Bash)
+COMMANDS USED:
+hostnamectl
+cat /etc/os-release
+uname -a
+uptime
+nproc
+free -h
+date
+date -u
+timedatectl
+chronyc tracking 2>/dev/null
+chronyc sources -v 2>/dev/null
+
+CAPTURED RESULT:
+Operating system : SUSE Linux Enterprise Server 15 SP7
+Kernel           : Linux 6.4.0-150700.53.19-default
+Architecture     : x86-64
+Hardware model   : r6i.8xlarge
+CPU count        : 32
+Memory           : 247Gi       131Gi       111Gi        12Gi        18Gi       115Gi
+Swap             : 23Gi          0B        23Gi
+Time zone        : Etc/UTC (UTC, +0000)
+Clock sync       : yes
+NTP service      : active
+
+FILESYSTEM CAPACITY
+----------------------------------------------------
+RUN AS: root (Bash)
+COMMANDS USED:
+df -hT
+df -i
+
+CAPTURED RESULT:
+/dev/mapper/vgcal-sysfiles xfs        53G   30G   24G  55% /vol/vol_S4H/sysfiles
+/dev/mapper/vgcal-dbdata   xfs       418G  375G   44G  90% /vol/vol_S4H/data
+/dev/mapper/vgcal-dblog    xfs       122G   92G   31G  76% /vol/vol_S4H/log
+
+LVM STRIPING
+----------------------------------------------------
+RUN AS: root (Bash)
+COMMANDS USED:
+pvs 2>/dev/null
+vgs 2>/dev/null
+lvs -a -o lv_name,vg_name,lv_size,segtype,stripes,devices 2>/dev/null
+
+CAPTURED RESULT:
+  back     vgcal   3.52g striped   12 /dev/nvme3n1(12652),/dev/nvme4n1(12652),/dev/nvme5n1(12652),/dev/nvme6n1(12652),/dev/nvme13n1(12652),/dev/nvme7n1(12652),/dev/nvme8n1(12652),/dev/nvme9n1(12652),/dev/nvme11n1(12652),/dev/nvme10n1(12652),/dev/nvme12n1(12652),/dev/nvme14n1(12652)
+  dbdata   vgcal 418.03g striped   12 /dev/nvme3n1(0),/dev/nvme4n1(0),/dev/nvme5n1(0),/dev/nvme6n1(0),/dev/nvme13n1(0),/dev/nvme7n1(0),/dev/nvme8n1(0),/dev/nvme9n1(0),/dev/nvme11n1(0),/dev/nvme10n1(0),/dev/nvme12n1(0),/dev/nvme14n1(0)                                                
+  dblog    vgcal 122.02g striped   12 /dev/nvme3n1(8918),/dev/nvme4n1(8918),/dev/nvme5n1(8918),/dev/nvme6n1(8918),/dev/nvme13n1(8918),/dev/nvme7n1(8918),/dev/nvme8n1(8918),/dev/nvme9n1(8918),/dev/nvme11n1(8918),/dev/nvme10n1(8918),/dev/nvme12n1(8918),/dev/nvme14n1(8918)            
+  sysfiles vgcal  53.02g striped   12 /dev/nvme3n1(11521),/dev/nvme4n1(11521),/dev/nvme5n1(11521),/dev/nvme6n1(11521),/dev/nvme13n1(11521),/dev/nvme7n1(11521),/dev/nvme8n1(11521),/dev/nvme9n1(11521),/dev/nvme11n1(11521),/dev/nvme10n1(11521),/dev/nvme12n1(11521),/dev/nvme14n1(11521)
+
+SAP/HANA MOUNTS
+----------------------------------------------------
+RUN AS: root (Bash)
+COMMAND USED:
+findmnt | grep -E '/hana/|/usr/sap/S4H|/sapmnt/S4H|/usr/sap/trans' || echo "No matching SAP/HANA mounts were found"
+
+CAPTURED RESULT:
+├─/hana/shared/HDB                                            /dev/mapper/vgcal-sysfiles[/hana/shared/HDB] xfs         rw,noatime,nodiratime,attr2,inode64,logbufs=8,logbsize=256k,sunit=128,swidth=1536,noquota
+├─/hana/data/HDB                                              /dev/mapper/vgcal-dbdata[/hana/data/HDB]     xfs         rw,noatime,nodiratime,attr2,inode64,logbufs=8,logbsize=256k,sunit=128,swidth=1536,noquota
+├─/hana/log/HDB                                               /dev/mapper/vgcal-dblog[/hana/log/HDB]       xfs         rw,noatime,nodiratime,attr2,inode64,logbufs=8,logbsize=256k,sunit=128,swidth=1536,noquota
+├─/usr/sap/S4H                                                /dev/mapper/vgcal-sysfiles[/usr/sap/S4H]     xfs         rw,noatime,nodiratime,attr2,inode64,logbufs=8,logbsize=256k,sunit=128,swidth=1536,noquota
+├─/sapmnt/S4H                                                 /dev/mapper/vgcal-sysfiles[/sapmnt/S4H]      xfs         rw,noatime,nodiratime,attr2,inode64,logbufs=8,logbsize=256k,sunit=128,swidth=1536,noquota
+
+VIRTUAL HOST RESOLUTION
+----------------------------------------------------
+RUN AS: root (Bash)
+COMMAND USED:
+for h in vhcals4hci vhcals4hcs vhcalhdbdb; do echo "--- $h ---"; getent hosts "$h"; ping -c 1 -W 2 "$h" 2>/dev/null; done
+
+CAPTURED RESULT:
+vhcals4hci -> 10.0.22.162 (ping successful)
+vhcals4hcs -> 10.0.22.162 (ping successful)
+vhcalhdbdb -> 10.0.22.162 (ping successful)
+
+SAP PROFILE HOST PARAMETERS
+----------------------------------------------------
+RUN AS: root (Bash)
+COMMAND USED:
+grep -HnEi '^[[:space:]]*(SAPLOCALHOST|SAPGLOBALHOST|SAPDBHOST|rdisp/mshost|icm/host_name_full|dbs/hdb/dbname|Autostart)[[:space:]]*=' /sapmnt/S4H/profile/* /usr/sap/HDB/SYS/profile/* 2>/dev/null
+
+CAPTURED RESULT:
+/sapmnt/S4H/profile/DEFAULT.PFL:16:SAPDBHOST = vhcalhdbdb
+/sapmnt/S4H/profile/DEFAULT.PFL:19:SAPGLOBALHOST = vhcals4hcs
+/sapmnt/S4H/profile/DEFAULT.PFL:24:rdisp/mshost = vhcals4hcs
+/sapmnt/S4H/profile/DEFAULT.PFL:66:icm/host_name_full = $(SAPLOCALHOST).$(SAPFQDN)
+/sapmnt/S4H/profile/DEFAULT.PFL:225:dbs/hdb/dbname = HDB
+/sapmnt/S4H/profile/S4H_ASCS01_vhcals4hcs:63:SAPLOCALHOST = vhcals4hcs
+/sapmnt/S4H/profile/S4H_D00_vhcals4hci:348:SAPLOCALHOST = vhcals4hci
+/usr/sap/HDB/SYS/profile/DEFAULT.PFL:2:SAPGLOBALHOST=vhcalhdbdb
+/usr/sap/HDB/SYS/profile/HDB_HDB02_vhcalhdbdb:11:SAPLOCALHOST=vhcalhdbdb
+/usr/sap/HDB/SYS/profile/HDB_HDB02_vhcalhdbdb:6:Autostart = 0
+
+SAP HOST AGENT
+----------------------------------------------------
+RUN AS: root (Bash)
+COMMANDS USED:
+/usr/sap/hostctrl/exe/saphostexec -status
+/usr/sap/hostctrl/exe/saphostctrl -function ListInstances
+rpm -qa | grep -i saphostagent
+
+CAPTURED RESULT:
+saphostexec running (pid 27323)
+sapstartsrv running (pid 27373)
+saposcol running (pid 27424)
+Instances: S4H/00 vhcals4hci; S4H/01 vhcals4hcs; HDB/02 vhcalhdbdb
+
+SECURITY / MONITORING COMPONENTS
+----------------------------------------------------
+RUN AS: root (Bash)
+COMMANDS USED:
+rpm -qa | grep -Ei 'clam|watchman|incron' | sort
+for cmd in clamscan clamdscan watchman incrontab incrond; do printf "%-15s " "$cmd"; command -v "$cmd" || echo "NOT FOUND"; done
+for svc in clamav-daemon.service clamd.service clamd@scan.service clamsap.service incrond.service watchman.service; do echo "--- $svc ---"; systemctl is-enabled "$svc" 2>/dev/null || true; systemctl is-active "$svc" 2>/dev/null || true; done
+find /usr/sap -maxdepth 3 \( -iname 'DAA*' -o -iname 'SMDA*' \) -print 2>/dev/null || true
+ps -ef | grep -Ei '[s]mdagent|[d]iagnostics[.]agent' || true
+systemctl list-unit-files --no-pager 2>/dev/null | grep -Ei 'smd|daa|diagnostic' || true
+find /usr/sap -type f \( -iname '*smdagent*.log' -o -iname '*sldreg*.log' \) -print 2>/dev/null || true
+CERT=/usr/sap/S4H/D00/sec/SAPSSLS/F.crt
+if [ -r "$CERT" ]; then openssl x509 -in "$CERT" -noout -subject -issuer -serial -startdate -enddate -fingerprint -sha256; else echo "FAIL: certificate is missing or unreadable: $CERT"; fi
+
+CAPTURED RESULT:
+ClamAV binaries       : NOT FOUND
+Watchman binary       : NOT FOUND
+incrond/incrontab     : NOT FOUND
+Diagnostics Agent     : NOT FOUND
+TLS certificate       : MISSING /usr/sap/S4H/D00/sec/SAPSSLS/F.crt
+
+S4H APPLICATION STATUS
+----------------------------------------------------
+RUN AS: s4hadm (C shell)
+COMMANDS USED:
+/usr/sap/hostctrl/exe/sapcontrol -host vhcals4hci -nr 00 -function GetProcessList
+/usr/sap/hostctrl/exe/sapcontrol -host vhcals4hcs -nr 01 -function GetProcessList
+/usr/sap/hostctrl/exe/sapcontrol -host vhcals4hci -nr 00 -function GetSystemInstanceList
+
+CAPTURED RESULT:
+disp+work, Dispatcher, GREEN, Running, 2026 07 15 16:34:07, 49:24:06, 14293
+igswd_mt, IGS Watchdog, GREEN, Running, 2026 07 15 16:34:07, 49:24:06, 14294
+gwrd, Gateway, GREEN, Running, 2026 07 15 16:34:08, 49:24:05, 14298
+icman, ICM, GREEN, Running, 2026 07 15 16:37:07, 49:21:06, 15988
+msg_server, MessageServer, GREEN, Running, 2026 07 15 16:32:53, 49:25:20, 13584
+enq_server, Enqueue Server 2, GREEN, Running, 2026 07 15 16:32:53, 49:25:20, 13585
+sapwebdisp, Web Dispatcher, GREEN, Running, 2026 07 15 16:32:53, 49:25:20, 13586
+
+S4H KERNEL
+----------------------------------------------------
+RUN AS: s4hadm (C shell)
+COMMANDS USED:
+which disp+work
+disp+work -version
+R3trans -version
+tp -V
+/usr/sap/hostctrl/exe/sapcontrol -host vhcals4hci -nr 00 -function GetVersionInfo
+/usr/sap/hostctrl/exe/sapcontrol -host vhcals4hcs -nr 01 -function GetVersionInfo
+
+CAPTURED RESULT:
+Kernel release      : 793
+Kernel patch level  : 101
+DBSL version        : 793.02 patch 0.101
+tp version          : 381.582.43
+
+S4H LICENSE
+----------------------------------------------------
+RUN AS: s4hadm (C shell)
+COMMANDS USED:
+saplikey pf=/sapmnt/S4H/profile/S4H_ASCS01_vhcals4hcs -show
+saplikey pf=/sapmnt/S4H/profile/S4H_ASCS01_vhcals4hcs -get
+
+CAPTURED RESULT:
+System                : S4H
+Hardware Key          : F1574798711
+Software Product      : NetWeaver_HDB
+Software Product      : Maintenance_HDB
+Type of License Key   : temporary
+Begin of Validity     : 20260715
+End   of Validity     : 20261013
+Validity              : valid
+
+S4H DATABASE CONNECTIVITY
+----------------------------------------------------
+RUN AS: s4hadm (C shell)
+COMMANDS USED:
+hdbuserstore LIST
+cd /usr/sap/S4H/D00/work
+R3trans -d
+set R3TRANS_RC = $status
+echo "R3trans return code: $R3TRANS_RC"
+tail -100 trans.log
+
+CAPTURED RESULT:
+User store key      : DEFAULT
+Database            : HDB
+R3trans result      : R3trans finished (0000)
+Return code         : 0
+Transport result    : End of Transport (0000)
+
+HANA VERSION
+----------------------------------------------------
+RUN AS: hdbadm (C shell)
+COMMANDS USED:
+HDB version
+/usr/sap/hostctrl/exe/sapcontrol -host vhcalhdbdb -nr 02 -function GetVersionInfo
+
+CAPTURED RESULT:
+version:             2.00.079.00.1720729199
+branch:              fa/hana2sp07
+machine config:      linuxx86_64
+compile date:        2024-07-11 22:49:09
+
+HANA PROCESS STATUS
+----------------------------------------------------
+RUN AS: hdbadm (C shell)
+COMMANDS USED:
+HDB info
+/usr/sap/hostctrl/exe/sapcontrol -host vhcalhdbdb -nr 02 -function GetProcessList
+
+CAPTURED RESULT:
+hdbdaemon, HDB Daemon, GREEN, Running, 2026 07 15 16:17:37, 49:41:49, 25681
+hdbcompileserver, HDB Compileserver, GREEN, Running, 2026 07 15 16:18:15, 49:41:11, 26025
+hdbdiserver, HDB Deployment Infrastructure Server-HDB, GREEN, Running, 2026 07 15 16:20:34, 49:38:52, 27178
+hdbdocstore, HDB DocStore-HDB, GREEN, Running, 2026 07 15 16:18:16, 49:41:10, 26069
+hdbdpserver, HDB DPserver-HDB, GREEN, Running, 2026 07 15 16:18:16, 49:41:10, 26072
+hdbindexserver, HDB Indexserver-HDB, GREEN, Running, 2026 07 15 16:18:16, 49:41:10, 26075
+hdbnameserver, HDB Nameserver, GREEN, Running, 2026 07 15 16:17:39, 49:41:47, 25707
+hdbpreprocessor, HDB Preprocessor, GREEN, Running, 2026 07 15 16:18:15, 49:41:11, 26028
+hdbscriptserver, HDB Scriptserver-HDB, GREEN, Running, 2026 07 15 16:18:16, 49:41:10, 26078
+hdbwebdispatcher, HDB Web Dispatcher, GREEN, Running, 2026 07 15 16:20:34, 49:38:52, 27181
+hdbxsengine, HDB XSEngine-HDB, GREEN, Running, 2026 07 15 16:18:16, 49:41:10, 26081
+
+HANA CONNECTION
+----------------------------------------------------
+RUN AS: hdbadm (C shell)
+COMMANDS USED:
+hdbuserstore LIST
+hdbsql -U HDB_KEY_CAL -A -x "SELECT CURRENT_USER FROM DUMMY;"
+hdbsql -U HDB_KEY_CAL -A -x "SELECT DATABASE_NAME, ACTIVE_STATUS FROM SYS.M_DATABASES ORDER BY DATABASE_NAME;"
+
+CAPTURED RESULT:
+User store key      : HDB_KEY_CAL
+Endpoint            : vhcalhdbdb:30213
+User                : CAL_USER
+Current user query  : CAL_USER
+Active database     : SYSTEMDB
+
+HANA LICENSE
+----------------------------------------------------
+RUN AS: hdbadm (C shell)
+COMMAND USED:
+hdbsql -U HDB_KEY_CAL -A -x "SELECT * FROM SYS.M_LICENSES;"
+
+CAPTURED RESULT:
+System             : HDB
+Product            : SAP-HANA
+License type       : temporary
+Start date         : 2026-07-15
+Expiration date    : 2026-10-13 23:59:59.999999
+Product usage      : 96 GB
+
+HANA BACKUP / BACKINT
+----------------------------------------------------
+RUN AS: hdbadm (C shell)
+COMMANDS USED:
+hdbsql -U HDB_KEY_CAL -A -x "SELECT * FROM SYS.M_BACKUP_CONFIGURATION;"
+find /usr/sap/HDB/SYS/global/hdb/opt -maxdepth 3 -ls
+find /usr/sap/HDB/SYS/global/hdb/opt -type l -exec readlink -f {} \;
+find /usr/sap/HDB \( -iname '*backint*' -o -iname '*utl*' \) -print
+hdbsql -U HDB_KEY_CAL -A -x "SELECT TOP 20 * FROM SYS.M_BACKUP_CATALOG ORDER BY SYS_START_TIME DESC;"
+
+CAPTURED RESULT:
+Backint directory   : /usr/sap/HDB/SYS/global/hdb/opt
+Directory contents  : empty
+Backint files       : none found
+Backup catalog rows : none returned from SYSTEMDB
+Backup config rows  : no usable values returned
+Persistence params  : not confirmed from captured output
+
+HANA PROFILE / REPLICATION
+----------------------------------------------------
+RUN AS: hdbadm (C shell)
+COMMANDS USED:
+grep -HnEi '^[[:space:]]*Autostart[[:space:]]*=' /usr/sap/HDB/SYS/profile/*
+grep -HnEi '^[[:space:]]*(SAPLOCALHOST|SAPGLOBALHOST)[[:space:]]*=' /usr/sap/HDB/SYS/profile/*
+hdbnsutil -sr_state
+/bin/sh -c 'SCRIPT=/usr/sap/HDB/HDB02/exe/python_support/systemReplicationStatus.py; if [ -x "$SCRIPT" ]; then "$SCRIPT"; RC=$?; echo "systemReplicationStatus return code: $RC"; else echo "systemReplicationStatus.py was not found"; fi'
+
+CAPTURED RESULT:
+Autostart           : 0
+SAPGLOBALHOST       : vhcalhdbdb
+SAPLOCALHOST        : vhcalhdbdb
+HSR online          : true
+HSR mode            : none
+Detailed HSR script : not found
+
+CLUSTER STATUS
+----------------------------------------------------
+RUN AS: root (Bash)
+COMMANDS USED:
+rpm -qa | grep -Ei 'pacemaker|corosync|resource-agents|SAPHanaSR' || echo "No matching cluster packages were found"
+for svc in pacemaker.service corosync.service; do echo "----- $svc -----"; systemctl is-enabled "$svc" 2>/dev/null || echo "$svc is not enabled or not installed"; systemctl is-active "$svc" 2>/dev/null || echo "$svc is not active"; done
+command -v crm_mon >/dev/null 2>&1 && crm_mon -1Arf || echo "crm_mon is not installed"
+command -v crm >/dev/null 2>&1 && crm status || echo "crm is not installed"
+command -v pcs >/dev/null 2>&1 && pcs status --full || echo "pcs is not installed"
+if command -v crm_attribute >/dev/null 2>&1; then crm_attribute --type crm_config --name maintenance-mode --query 2>&1 || echo "Maintenance mode is not explicitly configured"; else echo "crm_attribute is not installed"; fi
+
+CAPTURED RESULT:
+Cluster packages    : none found
+pacemaker.service   : not installed / inactive
+corosync.service    : not installed / inactive
+crm/crm_mon/pcs     : not installed
+crm_attribute       : not installed
+
+CHECKS REQUIRING FOLLOW-UP
+----------------------------------------------------
+CORRECTED COMMANDS TO RERUN:
+
+# Run as s4hadm (C shell): application ICM/database/message-server parameters
+grep -HnEi '^[[:space:]]*(icm/server_port|icm/host_name_full|ssl/server_pse|wdisp/|rdisp/mshost|SAPDBHOST|dbs/hdb/dbname)[[:space:]]*=' /sapmnt/S4H/profile/DEFAULT.PFL /sapmnt/S4H/profile/S4H_D00_* /sapmnt/S4H/profile/S4H_ASCS01_*
+
+# Run as s4hadm (C shell): application Autostart/start-program parameters
+grep -HnEi '^[[:space:]]*(Autostart|Restart_Program|Start_Program)[[:space:]]*=' /sapmnt/S4H/profile/*
+
+# Run as hdbadm (C shell): HANA persistence parameters
+hdbsql -U HDB_KEY_CAL -A -x "SELECT * FROM SYS.M_INIFILE_CONTENTS WHERE FILE_NAME='global.ini' AND SECTION='persistence';"
+
+# Run as hdbadm (C shell): filtered persistence parameters
+hdbsql -U HDB_KEY_CAL -A -x "SELECT * FROM SYS.M_INIFILE_CONTENTS WHERE FILE_NAME='global.ini' AND SECTION='persistence';" | grep -Ei 'log_mode|log_backup_interval|basepath_|backint'
+
+FOLLOW-UP FINDINGS:
+1. Review /hana/data/HDB capacity because utilization is 90%.
+2. Confirm whether ClamAV, Watchman, and incrond are required by the build standard.
+3. Locate or install the expected TLS certificate and test the real customer HTTPS endpoint.
+4. Replace temporary S4H and HANA licenses before 2026-10-13.
+5. Confirm the backup design; Backint is not configured, SYSTEMDB returned no catalog entries, and tenant backup status remains unvalidated.
+6. Confirm whether HANA system replication and Pacemaker clustering are required; neither is configured.
+7. Rerun the application ICM/profile and application Autostart checks using C-shell-safe commands.
+8. Rerun the HANA persistence parameter query with a narrow column list or export format.
+
+LOG CLOSING COMMANDS (RUN AS root / Bash)
+----------------------------------------------------
+echo "========== VALIDATION COMPLETE =========="
+echo "Validation completed: $(date -Is)"
+echo "Results saved to: $LOG"
+sync
+exec >/dev/tty 2>&1
+sleep 1
+ls -lh "$LOG"
+tail -30 "$LOG"
+
+END OF REPRODUCIBLE VALIDATION LOG
+====================================================
