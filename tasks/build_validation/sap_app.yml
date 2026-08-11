@@ -381,3 +381,69 @@
     - inventory_hostname in (groups.get('hana_db', []))
     - save_raw_outputs | bool
   tags: [hana_license]
+
+- name: "SAP APP: get SAP instance list"
+  ansible.builtin.shell: "sapcontrol -function GetSystemInstanceList"
+  register: sap_instance_list
+  changed_when: false
+  failed_when: false
+  become: true
+  become_user: "{{ app_admin_user }}"
+  when:
+    - hana_validate_sap_app | bool
+    - inventory_hostname in (groups.get('nw_app', []))
+  tags: [sap_availability]
+
+- name: "SAP APP: extract instance numbers"
+  ansible.builtin.set_fact:
+    sap_instances: >-
+      {{ sap_instance_list.stdout | regex_findall('InstanceNr=(\\d+)') }}
+  when:
+    - sap_instance_list.stdout is defined
+    - hana_validate_sap_app | bool
+    - inventory_hostname in (groups.get('nw_app', []))
+  tags: [sap_availability]
+
+- name: "SAP APP: check SAP process list"
+  ansible.builtin.shell: "sapcontrol -nr {{ item }} -function GetProcessList"
+  loop: "{{ sap_instances | default([]) }}"
+  register: sap_process_check
+  changed_when: false
+  failed_when: false
+  become: true
+  become_user: "{{ app_admin_user }}"
+  when:
+    - sap_instances is defined
+    - hana_validate_sap_app | bool
+    - inventory_hostname in (groups.get('nw_app', []))
+  tags: [sap_availability]
+
+- name: "SAP APP: evaluate SAP availability"
+  ansible.builtin.set_fact:
+    sap_availability_status: >-
+      {{
+        'PASS'
+        if (sap_process_check.results | map(attribute='stdout') | join(' ') is search('GREEN'))
+        else 'FAIL'
+      }}
+    sap_availability_details: >-
+      {{ sap_process_check.results | map(attribute='stdout') | join(' | ') }}
+  when:
+    - sap_process_check is defined
+    - hana_validate_sap_app | bool
+    - inventory_hostname in (groups.get('nw_app', []))
+  tags: [sap_availability]
+
+- name: "SAP APP: record SAP availability result"
+  ansible.builtin.set_fact:
+    hana_check_results: >-
+      {{ hana_check_results + [{
+        'check': 'SAP Service Availability',
+        'status': sap_availability_status,
+        'details': sap_availability_details
+      }] }}
+  when:
+    - sap_availability_status is defined
+    - hana_validate_sap_app | bool
+    - inventory_hostname in (groups.get('nw_app', []))
+  tags: [sap_availability]
