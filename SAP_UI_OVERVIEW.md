@@ -51,7 +51,7 @@ The UI refuses to start if this file does not exist.
 ## 3.1 Basic startup
 
 ```bash
-python3 UI.py.py
+python3 UI.py
 ```
 
 Default URL:
@@ -75,7 +75,7 @@ Relative paths supplied by the other file arguments are resolved relative to thi
 Example:
 
 ```bash
-python3 UI.py.py --root /opt/sap-validation
+python3 UI.py --root /opt/sap-validation
 ```
 
 ### `--servers`
@@ -176,13 +176,13 @@ Valid range:
 Example:
 
 ```bash
-python3 UI.py.py --port 8779
+python3 UI.py --port 8779
 ```
 
 Port `0` lets the operating system choose an available port:
 
 ```bash
-python3 UI.py.py --port 0
+python3 UI.py --port 0
 ```
 
 ### `--no-browser`
@@ -190,7 +190,7 @@ python3 UI.py.py --port 0
 Prevents the UI from automatically opening a browser.
 
 ```bash
-python3 UI.py.py --no-browser
+python3 UI.py --no-browser
 ```
 
 ### `--access-log`
@@ -198,7 +198,7 @@ python3 UI.py.py --no-browser
 Prints every HTTP request to the terminal.
 
 ```bash
-python3 UI.py.py --access-log
+python3 UI.py --access-log
 ```
 
 Without this option, the UI generally uses a single replaceable terminal status line instead of continuously printing successful GET requests.
@@ -1334,13 +1334,13 @@ Could not start UI on 127.0.0.1:8765: [Errno 98] Address already in use
 Use another port:
 
 ```bash
-python3 UI.py.py --port 8779
+python3 UI.py --port 8779
 ```
 
 or:
 
 ```bash
-python3 UI.py.py --port 0
+python3 UI.py --port 0
 ```
 
 ## `sap_validate.py` not found
@@ -1399,7 +1399,7 @@ Some modes may create output without creating an aggregate summary.
 1. Start the UI:
 
 ```bash
-python3 UI.py.py --port 8779
+python3 UI.py --port 8779
 ```
 
 2. In Systems:
@@ -1489,7 +1489,7 @@ Example:
 
 ```text
 SAP Validation UI: http://127.0.0.1:8779/
-UI source: /path/to/UI.py.py
+UI source: /path/to/UI.py
 UI build: 2026.08.06-artifact-tree-v10-vscode-code-blocks
 Press Ctrl+C to stop the UI server.
 ```
