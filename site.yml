@@ -122,6 +122,15 @@
 
     - name: "LOAD: monitoring checks"
       ansible.builtin.import_tasks: tasks/build_validation/monitoring.yml
+    
+    - name: "LOAD: filesystem validation checks"
+      ansible.builtin.import_tasks: tasks/health/filesystem_validations.yml
+    
+    - name: "LOAD: availability checks"
+      ansible.builtin.import_tasks: tasks/availability/scc_availability.yml
+    
+    - name: "LOAD: prepatch readiness checks"
+      ansible.builtin.import_tasks: tasks/prepatch/patch_readiness.yml
 
     - name: "LOAD: Claire pre-patch readiness checks"
       ansible.builtin.import_tasks: tasks/prepatch/main.yml
