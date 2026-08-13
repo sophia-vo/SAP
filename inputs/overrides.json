@@ -8,10 +8,10 @@
       "aws_instance_id": "",
       "aws_dlm_policy_id": "",
       "sap_hostname_aliases": {
-        "sid-hdb-s4h.dummy.nodomain": "10.0.22.162",
-        "vhcals4hci": "10.0.22.162",
-        "vhcals4hcs": "10.0.22.162",
-        "vhcalhdbdb": "10.0.22.162"
+        "sid-hdb-s4h.dummy.nodomain": "11.1.11.111",
+        "vhcals4hci": "11.1.11.111",
+        "vhcals4hcs": "11.1.11.111",
+        "vhcalhdbdb": "11.1.11.111"
       },
       "sap_landscape": {
         "application_sid": "S4H",
