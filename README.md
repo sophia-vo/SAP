@@ -30,9 +30,11 @@ and `nw_app` interfaces for compatibility.
 
 4. See [Ansible_raw_output_and_parameter_guide.md](Ansible_raw_output_and_parameter_guide.md) for thorough documentation of every single tag and a guide on how to understand the output including understanding exit codes, the outputs located in the `artifacts` folder that are generated with each validation run, and basic operational recipes to get you started.
 
+5. See [SAP_UI_OVERVIEW.md](SAP_UI_OVERVIEW.md) for documention on the user interface. Much of the documentation above details the terminal usage, the UI is a python wrapper enabling the user to bypass the terminal.
+   
 ---
 
-### Validation Status
+### Validation Task Status
 
 #### Fully Tested and Validated
 
@@ -54,6 +56,8 @@ The following validation tasks have been fully tested, and their output has been
   * System architecture
 * **ICM ports**
 * **CVERS add-on and version report**
+* * **ClamAV**
+* * **SAP Diagnostics Agent**
 
 #### Implemented but Not Yet Fully Validated
 
@@ -75,10 +79,8 @@ Valid output has been obtained by manually running the relevant SQL commands aft
 The following service and package checks are implemented:
 
 * **incrond**
-* **ClamAV**
 * **ClamSAP**
 * **Watchman**
-* **SAP Diagnostics Agent**
 
 These packages and services are not currently installed on the sandbox system. The playbook correctly reports that they are not present, but the results cannot yet be validated with complete certainty.
 
